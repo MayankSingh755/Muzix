@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Muzix</string>
+    <string name="title_activity_splash">SplashActivity</string>
+    <string name="muzixx">MUZIXX</string>
+    <string name="get_started">Get Started</string>
+    <string name="storage_permission_required_to_load_your_music">Storage permission required to load your music</string>
+    <string name="MuzixListScreenWelcome">Listen Muzix</string>
+</resources>
