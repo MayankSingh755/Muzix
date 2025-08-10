@@ -75,4 +75,5 @@ dependencies {
 
     implementation("androidx.navigation:navigation-compose:2.9.3")
     implementation("androidx.navigation:navigation-compose-android:2.9.3")
+    implementation("androidx.core:core-ktx:1.16.0")
 }

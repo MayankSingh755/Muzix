@@ -19,6 +19,13 @@ val AppTypography = Typography(
     displaySmall = TextStyle(
         fontFamily = Poppins,
         fontWeight = FontWeight.SemiBold,
+        fontSize = 20.sp,
+        lineHeight = 40.sp,
+        letterSpacing = (-0.5).sp
+    ),
+    displayLarge = TextStyle(
+        fontFamily = Poppins,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 36.sp,
         lineHeight = 40.sp,
         letterSpacing = (-0.5).sp

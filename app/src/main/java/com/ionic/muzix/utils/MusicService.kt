@@ -22,6 +22,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.ionic.muzix.R
 import com.ionic.muzix.data.Muzix
 import android.content.ContentUris
+import android.content.pm.ServiceInfo
 import androidx.core.net.toUri
 import com.ionic.muzix.activity.MainActivity
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.core.app.ServiceCompat
 
 class MusicService : Service() {
 
@@ -318,12 +320,17 @@ class MusicService : Service() {
 
         if (exoPlayer.isPlaying) {
             if (!isForeground) {
-                startForeground(1, notification)
+                val foregroundServiceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                } else {
+                    0
+                }
+                ServiceCompat.startForeground(this, 1, notification, foregroundServiceType)
                 isForeground = true
             }
         } else {
             if (isForeground) {
-                stopForeground(false)
+                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
                 isForeground = false
             }
         }

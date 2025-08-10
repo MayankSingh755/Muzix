@@ -140,8 +140,8 @@ fun MuzixListScreen(
             ) {
                 Text(
                     stringResource(R.string.MuzixListScreenWelcome),
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.displaySmall
                 )
 
                 Spacer(Modifier.height(16.dp))
