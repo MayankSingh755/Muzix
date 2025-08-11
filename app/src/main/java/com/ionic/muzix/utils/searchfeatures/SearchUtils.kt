@@ -1,4 +1,4 @@
-package com.ionic.muzix.utils
+package com.ionic.muzix.utils.searchfeatures
 
 import com.ionic.muzix.data.Muzix
 
@@ -68,24 +68,5 @@ object SearchUtils {
         return suggestions.take(maxSuggestions)
     }
 
-    /**
-     * Highlight matching text in search results
-     */
-    fun getHighlightedText(
-        text: String,
-        query: String
-    ): String {
-        if (query.isBlank()) return text
 
-        val searchQuery = query.lowercase().trim()
-        val lowerText = text.lowercase()
-        val startIndex = lowerText.indexOf(searchQuery)
-
-        return if (startIndex >= 0) {
-            val endIndex = startIndex + searchQuery.length
-            "${text.substring(0, startIndex)}**${text.substring(startIndex, endIndex)}**${text.substring(endIndex)}"
-        } else {
-            text
-        }
-    }
 }

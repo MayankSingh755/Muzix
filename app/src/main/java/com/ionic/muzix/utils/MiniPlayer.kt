@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -26,7 +27,6 @@ import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import com.ionic.muzix.R
 import com.ionic.muzix.data.Muzix
-import com.ionic.muzix.utils.MusicService
 import kotlinx.coroutines.delay
 
 @Composable
@@ -35,7 +35,7 @@ fun MiniPlayer(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var musicService by remember { mutableStateOf<MusicService?>(null) }
+    var musicService by remember { mutableStateOf<MuzixService?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
     var playbackState by remember { mutableIntStateOf(Player.STATE_IDLE) }
@@ -46,7 +46,7 @@ fun MiniPlayer(
     val connection = remember {
         object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
-                musicService = (service as MusicService.MusicBinder).getService()
+                musicService = (service as MuzixService.MusicBinder).getService()
             }
 
             override fun onServiceDisconnected(name: ComponentName?) {
@@ -56,7 +56,7 @@ fun MiniPlayer(
     }
 
     LaunchedEffect(Unit) {
-        val intent = Intent(context, MusicService::class.java)
+        val intent = Intent(context, MuzixService::class.java)
         context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
     }
 
@@ -119,9 +119,8 @@ fun MiniPlayer(
                 .fillMaxWidth()
                 .height(80.dp)
                 .clickable { onExpandClick() },
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
+                containerColor = Color(0x1AFFFFFF)
             )
         ) {
             Row(

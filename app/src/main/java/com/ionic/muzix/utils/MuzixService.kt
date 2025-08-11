@@ -16,6 +16,7 @@ import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
+import androidx.media.session.MediaButtonReceiver
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -31,13 +32,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.core.app.ServiceCompat
+import android.util.Log
 
-class MusicService : Service() {
+class MuzixService : Service() {
 
     private val binder = MusicBinder()
     lateinit var exoPlayer: ExoPlayer
     private lateinit var mediaSession: MediaSessionCompat
     private var isForeground = false
+    private var isServiceStarted = false
 
     var muzixList: List<Muzix> = emptyList()
     var shuffledList: List<Muzix> = emptyList()
@@ -48,44 +51,59 @@ class MusicService : Service() {
     private val scope = CoroutineScope(Dispatchers.Main)
     private var updateJob: Job? = null
 
+    companion object {
+        private const val NOTIFICATION_ID = 1
+        private const val CHANNEL_ID = "music_channel"
+    }
+
     override fun onCreate() {
         super.onCreate()
+        Log.d("MuzixService", "Service onCreate")
+
         exoPlayer = ExoPlayer.Builder(this).build()
-        mediaSession = MediaSessionCompat(this, "MusicService")
-        mediaSession.setCallback(object : MediaSessionCompat.Callback() {
-            override fun onPlay() {
-                exoPlayer.play()
-            }
 
-            override fun onPause() {
-                exoPlayer.pause()
-            }
+        // MediaSession for headset & lockscreen control
+        mediaSession = MediaSessionCompat(this, "MuzixService").apply {
+            setCallback(object : MediaSessionCompat.Callback() {
+                override fun onPlay() {
+                    exoPlayer.play()
+                }
 
-            override fun onSkipToNext() {
-                skipToNext()
-            }
+                override fun onPause() {
+                    exoPlayer.pause()
+                }
 
-            override fun onSkipToPrevious() {
-                skipToPrevious()
-            }
+                override fun onSkipToNext() {
+                    skipToNext()
+                }
 
-            override fun onSeekTo(pos: Long) {
-                exoPlayer.seekTo(pos)
-            }
-        })
+                override fun onSkipToPrevious() {
+                    skipToPrevious()
+                }
+
+                override fun onSeekTo(pos: Long) {
+                    exoPlayer.seekTo(pos)
+                }
+            })
+            isActive = true
+        }
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                Log.d("MuzixService", "onIsPlayingChanged: $isPlaying")
                 if (isPlaying) {
                     startUpdating()
+                    startForegroundServiceSafely()
                 } else {
                     stopUpdating()
+                    stopForegroundServiceSafely()
                 }
                 updatePlaybackState()
                 updateNotification()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                Log.d("MuzixService", "onPlaybackStateChanged: $playbackState")
                 when (playbackState) {
                     Player.STATE_READY -> {
                         val muzix = getCurrentMuzix()
@@ -118,19 +136,29 @@ class MusicService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                "music_channel",
+                CHANNEL_ID,
                 "Music Playback",
                 NotificationManager.IMPORTANCE_LOW
-            )
+            ).apply {
+                description = "Music playback controls"
+                setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
             getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
 
     override fun onBind(intent: Intent?): IBinder? {
+        Log.d("MuzixService", "Service onBind")
         return binder
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d("MuzixService", "onStartCommand: ${intent?.action}")
+
+        // Handle media button intents
+        MediaButtonReceiver.handleIntent(mediaSession, intent)
+
         val action = intent?.action
         when (action) {
             "ACTION_PLAY_PAUSE" -> {
@@ -140,12 +168,22 @@ class MusicService : Service() {
             "ACTION_PREV" -> skipToPrevious()
             "ACTION_SHUFFLE" -> toggleShuffle()
             "ACTION_REPEAT" -> toggleRepeat()
+            "ACTION_START_FOREGROUND" -> {
+                // This action is used to start the service in foreground mode safely
+                isServiceStarted = true
+                if (exoPlayer.isPlaying) {
+                    startForegroundServiceSafely()
+                }
+            }
         }
+
         return START_STICKY
     }
 
     override fun onDestroy() {
+        Log.d("MuzixService", "Service onDestroy")
         stopUpdating()
+        stopForegroundServiceSafely()
         exoPlayer.release()
         mediaSession.release()
         super.onDestroy()
@@ -157,6 +195,19 @@ class MusicService : Service() {
         isShuffle = shuffle
         isRepeat = repeat
         updateShuffledList()
+
+        // Start the service properly before playing
+        if (!isServiceStarted) {
+            val intent = Intent(this, MuzixService::class.java).apply {
+                action = "ACTION_START_FOREGROUND"
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        }
+
         playCurrent()
     }
 
@@ -167,13 +218,13 @@ class MusicService : Service() {
     fun toggleShuffle() {
         isShuffle = !isShuffle
         updateShuffledList()
-        currentIndex = 0 // Reset to avoid index issues
+        currentIndex = 0
         playCurrent()
     }
 
     fun toggleRepeat() {
         isRepeat = !isRepeat
-        updateNotification() // To update the icon
+        updateNotification()
     }
 
     private fun playCurrent() {
@@ -220,18 +271,24 @@ class MusicService : Service() {
             contentResolver.openInputStream(uri)?.use { input ->
                 return BitmapFactory.decodeStream(input)
             }
-        } catch (_: Exception) {
-            // Handle error silently
+        } catch (e: Exception) {
+            Log.w("MuzixService", "Failed to load album art: ${e.message}")
         }
         return null
     }
 
     private fun updatePlaybackState() {
-        val state = if (exoPlayer.isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+        val state = if (exoPlayer.isPlaying)
+            PlaybackStateCompat.STATE_PLAYING
+        else
+            PlaybackStateCompat.STATE_PAUSED
+
         val playbackState = PlaybackStateCompat.Builder()
             .setState(state, exoPlayer.currentPosition, 1f)
             .setActions(
-                PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                PlaybackStateCompat.ACTION_PLAY or
+                        PlaybackStateCompat.ACTION_PAUSE or
+                        PlaybackStateCompat.ACTION_PLAY_PAUSE or
                         PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
                         PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
                         PlaybackStateCompat.ACTION_SEEK_TO
@@ -255,14 +312,60 @@ class MusicService : Service() {
         updateJob = null
     }
 
+    private fun startForegroundServiceSafely() {
+        if (!isForeground) {
+            try {
+                val notification = buildNotification()
+                val foregroundServiceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                } else {
+                    0
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    // For Android 14+ (API 34+), use ServiceCompat
+                    ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, foregroundServiceType)
+                } else {
+                    // For older versions
+                    startForeground(NOTIFICATION_ID, notification)
+                }
+
+                isForeground = true
+                Log.d("MuzixService", "Started foreground service")
+            } catch (e: Exception) {
+                Log.e("MuzixService", "Failed to start foreground service: ${e.message}")
+                // Fallback: just post the notification without foreground service
+                val notificationManager = getSystemService(NotificationManager::class.java)
+                notificationManager.notify(NOTIFICATION_ID, buildNotification())
+            }
+        }
+    }
+
+    private fun stopForegroundServiceSafely() {
+        if (isForeground) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
+                } else {
+                    stopForeground(STOP_FOREGROUND_DETACH)
+                }
+                isForeground = false
+                Log.d("MuzixService", "Stopped foreground service")
+            } catch (e: Exception) {
+                Log.e("MuzixService", "Failed to stop foreground service: ${e.message}")
+            }
+        }
+    }
+
     private fun buildNotification(): Notification {
         val currentList = if (isShuffle) shuffledList else muzixList
         val currentMuzix = currentList.getOrNull(currentIndex)
-            ?: return NotificationCompat.Builder(this, "music_channel")
+            ?: return NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.baseline_music_note_24)
                 .setContentTitle("No Track")
                 .setContentText("")
                 .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setOnlyAlertOnce(true)
                 .build()
 
         val isPlaying = exoPlayer.isPlaying
@@ -272,26 +375,41 @@ class MusicService : Service() {
         val shuffleIcon = if (isShuffle) R.drawable.outline_shuffle_on_24 else R.drawable.outline_shuffle_24
         val repeatIcon = if (isRepeat) R.drawable.outline_repeat_on_24 else R.drawable.outline_repeat_24
 
-        val playPauseIntent = Intent(this, MusicService::class.java).apply { action = "ACTION_PLAY_PAUSE" }
-        val playPausePending = PendingIntent.getService(this, 0, playPauseIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val playPausePending = PendingIntent.getService(this, 0,
+            Intent(this, MuzixService::class.java).apply { action = "ACTION_PLAY_PAUSE" },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
-        val nextIntent = Intent(this, MusicService::class.java).apply { action = "ACTION_NEXT" }
-        val nextPending = PendingIntent.getService(this, 1, nextIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val nextPending = PendingIntent.getService(this, 1,
+            Intent(this, MuzixService::class.java).apply { action = "ACTION_NEXT" },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
-        val prevIntent = Intent(this, MusicService::class.java).apply { action = "ACTION_PREV" }
-        val prevPending = PendingIntent.getService(this, 2, prevIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val prevPending = PendingIntent.getService(this, 2,
+            Intent(this, MuzixService::class.java).apply { action = "ACTION_PREV" },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
-        val shuffleIntent = Intent(this, MusicService::class.java).apply { action = "ACTION_SHUFFLE" }
-        val shufflePending = PendingIntent.getService(this, 3, shuffleIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val shufflePending = PendingIntent.getService(this, 3,
+            Intent(this, MuzixService::class.java).apply { action = "ACTION_SHUFFLE" },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
-        val repeatIntent = Intent(this, MusicService::class.java).apply { action = "ACTION_REPEAT" }
-        val repeatPending = PendingIntent.getService(this, 4, repeatIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val repeatPending = PendingIntent.getService(this, 4,
+            Intent(this, MuzixService::class.java).apply { action = "ACTION_REPEAT" },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
-        val contentIntent = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val contentIntent = PendingIntent.getActivity(this, 0,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
         val bitmap = getAlbumArt(currentMuzix.albumId)
 
-        return NotificationCompat.Builder(this, "music_channel")
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.baseline_music_note_24)
             .setContentTitle(currentMuzix.title)
             .setContentText(currentMuzix.artist)
@@ -301,6 +419,7 @@ class MusicService : Service() {
             .setOngoing(isPlaying)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(shuffleIcon, "Shuffle", shufflePending)
             .addAction(R.drawable.outline_skip_previous_24, "Previous", prevPending)
             .addAction(playPauseIcon, playPauseTitle, playPausePending)
@@ -308,31 +427,18 @@ class MusicService : Service() {
             .addAction(repeatIcon, "Repeat", repeatPending)
             .setStyle(MediaStyle()
                 .setMediaSession(mediaSession.sessionToken)
-                .setShowActionsInCompactView(1, 2, 3) // Prev, Play/Pause, Next in compact view
+                .setShowActionsInCompactView(1, 2, 3)
             )
             .build()
     }
 
     private fun updateNotification() {
-        val notification = buildNotification()
-        val notificationManager = getSystemService(NotificationManager::class.java)
-        notificationManager.notify(1, notification)
-
-        if (exoPlayer.isPlaying) {
-            if (!isForeground) {
-                val foregroundServiceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                } else {
-                    0
-                }
-                ServiceCompat.startForeground(this, 1, notification, foregroundServiceType)
-                isForeground = true
-            }
-        } else {
-            if (isForeground) {
-                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH)
-                isForeground = false
-            }
+        try {
+            val notification = buildNotification()
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.notify(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Log.e("MuzixService", "Failed to update notification: ${e.message}")
         }
     }
 
@@ -342,6 +448,6 @@ class MusicService : Service() {
     }
 
     inner class MusicBinder : Binder() {
-        fun getService(): MusicService = this@MusicService
+        fun getService(): MuzixService = this@MuzixService
     }
 }

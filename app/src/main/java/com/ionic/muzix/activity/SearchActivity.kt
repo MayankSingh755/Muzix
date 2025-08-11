@@ -14,13 +14,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.ionic.muzix.utils.SearchBar
-import com.ionic.muzix.utils.SearchSuggestions
+import com.ionic.muzix.utils.searchfeatures.SearchBar
+import com.ionic.muzix.utils.searchfeatures.SearchSuggestions
 import com.ionic.muzix.data.Muzix
 import com.ionic.muzix.ui.theme.MuzixTheme
 import com.ionic.muzix.utils.MuzixList
-import com.ionic.muzix.utils.SearchManager
-import com.ionic.muzix.utils.SearchUtils
+import com.ionic.muzix.utils.searchfeatures.SearchManager
+import com.ionic.muzix.utils.searchfeatures.SearchUtils
 import com.ionic.muzix.data.SharedMuzixData
 import kotlinx.coroutines.delay
 

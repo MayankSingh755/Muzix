@@ -1,4 +1,4 @@
-package com.ionic.muzix.utils
+package com.ionic.muzix.utils.searchfeatures
 
 import android.content.Context
 import android.content.SharedPreferences

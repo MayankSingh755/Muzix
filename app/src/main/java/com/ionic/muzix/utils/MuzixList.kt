@@ -2,6 +2,8 @@ package com.ionic.muzix.utils
 
 import android.annotation.SuppressLint
 import android.content.ContentUris
+import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -61,9 +63,8 @@ private fun MuzixItem(
         modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = Color(0x00FFFFFF)
         )
     ) {
         Row(
@@ -83,7 +84,7 @@ private fun MuzixItem(
                 contentDescription = "Album Art",
                 modifier = Modifier
                     .size(56.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .clip(RoundedCornerShape(8.dp)).background(Color.Gray),
                 contentScale = ContentScale.Crop,
                 error = painterResource(R.drawable.baseline_music_note_24),
                 placeholder = painterResource(R.drawable.baseline_music_note_24)
@@ -92,7 +93,7 @@ private fun MuzixItem(
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).basicMarquee()
             ) {
                 Text(
                     text = getHighlightedText(muzix.title ?: "Unknown", searchQuery),
@@ -116,6 +117,7 @@ private fun MuzixItem(
                     if (album != muzix.title && album.isNotBlank()) {
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
+                            modifier = Modifier.basicMarquee(),
                             text = getHighlightedText(album, searchQuery),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
@@ -159,11 +161,4 @@ private fun getHighlightedText(
     } else {
         AnnotatedString(text)
     }
-}
-
-private fun formatDuration(durationMs: Long): String {
-    val totalSeconds = durationMs / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return String.format("%d:%02d", minutes, seconds)
 }
