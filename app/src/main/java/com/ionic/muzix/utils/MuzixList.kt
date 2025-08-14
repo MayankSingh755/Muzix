@@ -28,6 +28,7 @@ import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.ionic.muzix.R
 import com.ionic.muzix.data.Muzix
+import androidx.compose.material3.MaterialTheme
 
 @Composable
 fun MuzixList(
@@ -36,10 +37,11 @@ fun MuzixList(
     modifier: Modifier = Modifier,
     searchQuery: String = ""
 ) {
+
     LazyColumn(
-        modifier = modifier,
         contentPadding = PaddingValues(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.fillMaxSize()
     ) {
         itemsIndexed(muzix) { index, music ->
             MuzixItem(
@@ -84,7 +86,8 @@ private fun MuzixItem(
                 contentDescription = "Album Art",
                 modifier = Modifier
                     .size(56.dp)
-                    .clip(RoundedCornerShape(8.dp)).background(Color.Gray),
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Gray),
                 contentScale = ContentScale.Crop,
                 error = painterResource(R.drawable.baseline_music_note_24),
                 placeholder = painterResource(R.drawable.baseline_music_note_24)
@@ -93,7 +96,9 @@ private fun MuzixItem(
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(
-                modifier = Modifier.weight(1f).basicMarquee()
+                modifier = Modifier
+                    .weight(1f)
+                    .basicMarquee()
             ) {
                 Text(
                     text = getHighlightedText(muzix.title ?: "Unknown", searchQuery),

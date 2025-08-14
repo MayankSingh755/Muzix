@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     id("kotlin-parcelize")
     id("kotlin-android")
+    id("com.google.devtools.ksp")
 }
 
 android {
@@ -39,6 +40,7 @@ android {
     buildFeatures {
         compose = true
     }
+
 }
 
 dependencies {
@@ -76,4 +78,11 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.3")
     implementation("androidx.navigation:navigation-compose-android:2.9.3")
     implementation("androidx.core:core-ktx:1.16.0")
+
+    implementation ("androidx.room:room-runtime:2.5.0")
+    implementation ("androidx.room:room-ktx:2.5.0")
+    ksp ("androidx.room:room-compiler:2.5.0")
+
+    implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
+    implementation ("androidx.compose.foundation:foundation:1.5.4")
 }

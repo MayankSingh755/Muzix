@@ -8,6 +8,9 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -39,6 +42,7 @@ class MuzixService : Service() {
     private val binder = MusicBinder()
     lateinit var exoPlayer: ExoPlayer
     private lateinit var mediaSession: MediaSessionCompat
+    private lateinit var audioManager: AudioManager
     private var isForeground = false
     private var isServiceStarted = false
 
@@ -47,6 +51,11 @@ class MuzixService : Service() {
     var currentIndex: Int = 0
     var isShuffle: Boolean = false
     var isRepeat: Boolean = false
+
+    // Audio Focus Management
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var hasAudioFocus = false
+    private var wasPlayingBeforeFocusLoss = false
 
     private val scope = CoroutineScope(Dispatchers.Main)
     private var updateJob: Job? = null
@@ -60,13 +69,18 @@ class MuzixService : Service() {
         super.onCreate()
         Log.d("MuzixService", "Service onCreate")
 
+        // Initialize AudioManager
+        audioManager = getSystemService(AUDIO_SERVICE) as AudioManager
+
         exoPlayer = ExoPlayer.Builder(this).build()
 
         // MediaSession for headset & lockscreen control
         mediaSession = MediaSessionCompat(this, "MuzixService").apply {
             setCallback(object : MediaSessionCompat.Callback() {
                 override fun onPlay() {
-                    exoPlayer.play()
+                    if (requestAudioFocus()) {
+                        exoPlayer.play()
+                    }
                 }
 
                 override fun onPause() {
@@ -83,6 +97,11 @@ class MuzixService : Service() {
 
                 override fun onSeekTo(pos: Long) {
                     exoPlayer.seekTo(pos)
+                }
+
+                override fun onStop() {
+                    abandonAudioFocus()
+                    exoPlayer.pause()
                 }
             })
             isActive = true
@@ -115,7 +134,9 @@ class MuzixService : Service() {
                     Player.STATE_ENDED -> {
                         if (isRepeat) {
                             exoPlayer.seekTo(0)
-                            exoPlayer.playWhenReady = true
+                            if (hasAudioFocus) {
+                                exoPlayer.playWhenReady = true
+                            }
                         } else {
                             skipToNext()
                         }
@@ -130,7 +151,98 @@ class MuzixService : Service() {
             }
         })
 
+        // Setup audio focus change listener
+        setupAudioFocusListener()
         createNotificationChannel()
+    }
+
+    private fun setupAudioFocusListener() {
+        val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+            Log.d("MuzixService", "Audio focus changed: $focusChange")
+            when (focusChange) {
+                AudioManager.AUDIOFOCUS_GAIN -> {
+                    // Regained audio focus
+                    hasAudioFocus = true
+                    if (wasPlayingBeforeFocusLoss) {
+                        exoPlayer.play()
+                        exoPlayer.volume = 1.0f
+                        wasPlayingBeforeFocusLoss = false
+                    }
+                    Log.d("MuzixService", "Audio focus gained - resuming playback")
+                }
+                AudioManager.AUDIOFOCUS_LOSS -> {
+                    // Permanent loss of audio focus
+                    hasAudioFocus = false
+                    wasPlayingBeforeFocusLoss = exoPlayer.isPlaying
+                    exoPlayer.pause()
+                    Log.d("MuzixService", "Audio focus lost permanently - pausing")
+                }
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                    // Temporary loss of audio focus
+                    hasAudioFocus = false
+                    wasPlayingBeforeFocusLoss = exoPlayer.isPlaying
+                    exoPlayer.pause()
+                    Log.d("MuzixService", "Audio focus lost temporarily - pausing")
+                }
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                    // Temporary loss, but we can keep playing at reduced volume
+                    if (exoPlayer.isPlaying) {
+                        exoPlayer.volume = 0.3f // Lower volume
+                        Log.d("MuzixService", "Audio focus lost temporarily - ducking volume")
+                    }
+                }
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+
+            audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(audioAttributes)
+                .setAcceptsDelayedFocusGain(true)
+                .setWillPauseWhenDucked(false) // We'll handle ducking ourselves
+                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                .build()
+        } else {
+            // For older Android versions, we'll use the deprecated method
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                audioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        }
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.requestAudioFocus(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                null, // We already set up the listener in setupAudioFocusListener
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+        }
+
+        hasAudioFocus = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        Log.d("MuzixService", "Audio focus request result: $result, hasAudioFocus: $hasAudioFocus")
+        return hasAudioFocus
+    }
+
+    private fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(null)
+        }
+        hasAudioFocus = false
+        Log.d("MuzixService", "Audio focus abandoned")
     }
 
     private fun createNotificationChannel() {
@@ -162,7 +274,13 @@ class MuzixService : Service() {
         val action = intent?.action
         when (action) {
             "ACTION_PLAY_PAUSE" -> {
-                if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                if (exoPlayer.isPlaying) {
+                    exoPlayer.pause()
+                } else {
+                    if (requestAudioFocus()) {
+                        exoPlayer.play()
+                    }
+                }
             }
             "ACTION_NEXT" -> skipToNext()
             "ACTION_PREV" -> skipToPrevious()
@@ -184,6 +302,7 @@ class MuzixService : Service() {
         Log.d("MuzixService", "Service onDestroy")
         stopUpdating()
         stopForegroundServiceSafely()
+        abandonAudioFocus()
         exoPlayer.release()
         mediaSession.release()
         super.onDestroy()
@@ -233,7 +352,14 @@ class MuzixService : Service() {
         val mediaItem = MediaItem.fromUri(muzix.data)
         exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()
-        exoPlayer.playWhenReady = true
+
+        // Only start playing if we have audio focus
+        if (requestAudioFocus()) {
+            exoPlayer.playWhenReady = true
+        } else {
+            exoPlayer.playWhenReady = false
+        }
+
         updateMetadata(muzix)
         updatePlaybackState()
         updateNotification()
