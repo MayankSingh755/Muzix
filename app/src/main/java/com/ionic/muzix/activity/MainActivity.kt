@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import com.ionic.muzix.screens.MuzixListScreen
 import com.ionic.muzix.ui.theme.MuzixTheme
 import com.ionic.muzix.data.SharedMuzixData
+import android.widget.Toast
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,28 +17,26 @@ class MainActivity : ComponentActivity() {
         setContent {
             MuzixTheme {
                 MuzixListScreen(
-                    onMuzixClick = { music, position ->
+                    onMuzixClick = { musicList, position ->
                         // Store data in shared singleton
-                        SharedMuzixData.setData(music, position)
-
+                        SharedMuzixData.setData(musicList, position)
                         val intent = Intent(this, MuzixPlayerActivity::class.java)
-                        intent.putParcelableArrayListExtra("muzixList", ArrayList(music))
+                        intent.putParcelableArrayListExtra("muzixList", ArrayList(musicList))
                         intent.putExtra("initialIndex", position)
                         intent.putExtra("shouldStartPlayback", true)
                         startActivity(intent)
                     },
                     onMiniPlayerExpand = {
                         // Use shared data when expanding from mini player
+                        if (!SharedMuzixData.hasData()) {
+                            Toast.makeText(this, "No track selected", Toast.LENGTH_SHORT).show()
+                            return@MuzixListScreen
+                        }
                         val intent = Intent(this, MuzixPlayerActivity::class.java)
                         intent.putExtra("shouldStartPlayback", false)
                         intent.putExtra("fromMiniPlayer", true)
-
-                        // Only pass data if we have it stored
-                        if (SharedMuzixData.hasData()) {
-                            intent.putParcelableArrayListExtra("muzixList", ArrayList(SharedMuzixData.muzixList))
-                            intent.putExtra("initialIndex", SharedMuzixData.currentIndex)
-                        }
-
+                        intent.putParcelableArrayListExtra("muzixList", ArrayList(SharedMuzixData.muzixList))
+                        intent.putExtra("initialIndex", SharedMuzixData.currentIndex)
                         startActivity(intent)
                     }
                 )

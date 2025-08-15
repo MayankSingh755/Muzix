@@ -39,27 +39,17 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Fill
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.vectorResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.core.net.toUri
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
@@ -68,6 +58,15 @@ import com.ionic.muzix.data.Muzix
 import com.ionic.muzix.utils.MuzixService
 import kotlinx.coroutines.delay
 import kotlin.math.abs
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import com.ionic.muzix.utils.PlaylistAddDialog
 
 @Composable
 fun MuzixPlayerScreen(
@@ -77,7 +76,6 @@ fun MuzixPlayerScreen(
     shouldStartPlayback: Boolean = false
 ) {
     val context = LocalContext.current
-
     var muzixService by remember { mutableStateOf<MuzixService?>(null) }
     var currentIndex by rememberSaveable { mutableIntStateOf(initialIndex) }
     var isShuffle by rememberSaveable { mutableStateOf(false) }
@@ -87,25 +85,23 @@ fun MuzixPlayerScreen(
     var duration by remember { mutableLongStateOf(0L) }
     var isLoading by remember { mutableStateOf(false) }
     var playbackState by remember { mutableIntStateOf(Player.STATE_IDLE) }
-
-    // Swipe gesture states - improved for smoother animation
     var offsetX by remember { mutableFloatStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
-    var targetIndex by remember { mutableIntStateOf(initialIndex) }
+    var showAddDialog by remember { mutableStateOf(false) }
 
-    // Smoother swipe animation with spring physics
+    // Swipe animation
     val swipeAnimationProgress by animateFloatAsState(
-        targetValue = offsetX,
+        targetValue = if (isDragging) offsetX else 0f,
         animationSpec = if (isDragging) {
-            // Immediate response while dragging
             tween(durationMillis = 0)
         } else {
-            // Smooth spring back when released
-            tween(durationMillis = 300, easing = FastOutSlowInEasing)
+            tween(durationMillis = 400, easing = FastOutSlowInEasing)
         },
-        label = "swipeAnimation"
+        label = "swipeAnimation",
+        finishedListener = { if (!isDragging) offsetX = 0f }
     )
 
+    // Service connection
     val connection = remember {
         object : ServiceConnection {
             override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -114,7 +110,6 @@ fun MuzixPlayerScreen(
                     muzixService?.setPlaylist(muzixList, initialIndex, isShuffle, isRepeat)
                 }
             }
-
             override fun onServiceDisconnected(name: ComponentName?) {
                 muzixService = null
             }
@@ -122,17 +117,14 @@ fun MuzixPlayerScreen(
     }
 
     LaunchedEffect(Unit) {
-        val intent = Intent(context, MuzixService::class.java)
-        context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        context.bindService(Intent(context, MuzixService::class.java), connection, Context.BIND_AUTO_CREATE)
     }
 
     DisposableEffect(Unit) {
-        onDispose {
-            context.unbindService(connection)
-        }
+        onDispose { context.unbindService(connection) }
     }
 
-    // Poll for updates
+    // Poll updates
     LaunchedEffect(muzixService) {
         while (true) {
             muzixService?.let { service ->
@@ -149,33 +141,24 @@ fun MuzixPlayerScreen(
         }
     }
 
-    // Player control functions
+    // Player controls
     fun togglePlayPause() {
-        muzixService?.exoPlayer?.let {
-            if (it.isPlaying) {
-                it.pause()
-            } else {
-                it.play()
-            }
-        }
+        muzixService?.exoPlayer?.let { if (it.isPlaying) it.pause() else it.play() }
     }
 
     fun skipToNext() {
         muzixService?.skipToNext()
-        targetIndex = muzixService?.currentIndex ?: currentIndex
+        currentIndex = muzixService?.currentIndex ?: currentIndex
     }
 
     fun skipToPrevious() {
         muzixService?.skipToPrevious()
-        targetIndex = muzixService?.currentIndex ?: currentIndex
+        currentIndex = muzixService?.currentIndex ?: currentIndex
     }
 
     fun seekTo(position: Float) {
         muzixService?.exoPlayer?.let {
-            if (it.duration > 0) {
-                val seekPosition = (position * it.duration).toLong()
-                it.seekTo(seekPosition)
-            }
+            if (it.duration > 0) it.seekTo((position * it.duration).toLong())
         }
     }
 
@@ -189,20 +172,14 @@ fun MuzixPlayerScreen(
 
     // UI
     val muzix = muzixService?.getCurrentMuzix()
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         muzix?.let { currentMuzix ->
-            val albumArtUri = ContentUris.withAppendedId(
-                "content://media/external/audio/albumart".toUri(),
-                currentMuzix.albumId
-            )
-
-            // Blurred background
+            // Background
             AsyncImage(
-                model = albumArtUri,
+                model = ContentUris.withAppendedId(
+                    "content://media/external/audio/albumart".toUri(),
+                    currentMuzix.albumId
+                ),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -211,17 +188,11 @@ fun MuzixPlayerScreen(
                 error = painterResource(R.drawable.baseline_music_note_24),
                 placeholder = painterResource(R.drawable.baseline_music_note_24)
             )
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.3f)))
 
-            // Dark overlay
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.3f))
-            )
-
-            Column(
-                modifier = Modifier.fillMaxSize()
-            ) {
+            Column(modifier = Modifier.fillMaxSize()) {
                 // Top bar
                 Row(
                     modifier = Modifier
@@ -233,11 +204,24 @@ fun MuzixPlayerScreen(
                         onClick = onBack,
                         modifier = Modifier
                             .size(48.dp)
-                            .background(Color(0x30FFFFFF), shape = CircleShape)
+                            .background(Color(0x30FFFFFF), CircleShape)
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
+                            tint = Color.White
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(
+                        onClick = { showAddDialog = true },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(Color(0x30FFFFFF), CircleShape)
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.baseline_playlist_add_24),
+                            contentDescription = "Save to Playlist",
                             tint = Color.White
                         )
                     }
@@ -252,7 +236,7 @@ fun MuzixPlayerScreen(
                         .padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Album Art with improved swipe gesture and better spacing
+                    // Album art with swipe
                     Box(
                         modifier = Modifier
                             .size(280.dp)
@@ -382,58 +366,39 @@ fun MuzixPlayerScreen(
                         }
                     }
 
-                    // Update the swipe animation state management
-                    val swipeAnimationProgress by animateFloatAsState(
-                        targetValue = if (isDragging) offsetX else 0f,
-                        animationSpec = if (isDragging) {
-                            tween(durationMillis = 0)
-                        } else {
-                            tween(durationMillis = 400, easing = FastOutSlowInEasing)
-                        },
-                        label = "swipeAnimation",
-                        finishedListener = {
-                            if (!isDragging) {
-                                offsetX = 0f // Reset only if no skip occurred
-                            }
-                        }
-                    )
-
                     Text(
-                        text = "← Swipe to change tracks →",
+                        text = stringResource(R.string.swipe_to_change_tracks),
                         style = MaterialTheme.typography.bodySmall,
                         color = Color.White.copy(alpha = 0.4f),
                         modifier = Modifier.padding(top = 8.dp)
                     )
 
-
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    // Song Info
+                    // Song info
                     Text(
-                        modifier = Modifier.basicMarquee(),
                         text = currentMuzix.title.toString(),
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee()
                     )
-
                     Spacer(modifier = Modifier.height(8.dp))
-
                     Text(
-                        modifier = Modifier.basicMarquee(),
                         text = currentMuzix.artist,
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color.White.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee()
                     )
 
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    // VLC-style Linear Progress Bar
+                    // Progress bar
                     MuzixProgressBar(
                         progress = if (duration > 0) elapsed.toFloat() / duration else 0f,
                         onSeek = { seekTo(it) },
@@ -469,26 +434,15 @@ fun MuzixPlayerScreen(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Shuffle button
-                        IconButton(
-                            onClick = { toggleShuffle() }
-                        ) {
+                        IconButton(onClick = { toggleShuffle() }) {
                             Icon(
-                                painter = if (isShuffle) painterResource(R.drawable.outline_shuffle_on_24) else painterResource(
-                                    R.drawable.outline_shuffle_24
-                                ),
+                                painter = if (isShuffle) painterResource(R.drawable.outline_shuffle_on_24) else painterResource(R.drawable.outline_shuffle_24),
                                 contentDescription = "Shuffle",
-                                tint = if (isShuffle) MaterialTheme.colorScheme.primary else Color.White.copy(
-                                    alpha = 0.7f
-                                ),
+                                tint = if (isShuffle) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
                                 modifier = Modifier.size(24.dp)
                             )
                         }
-
-                        // Previous button
-                        IconButton(
-                            onClick = { skipToPrevious() }
-                        ) {
+                        IconButton(onClick = { skipToPrevious() }) {
                             Icon(
                                 painter = painterResource(R.drawable.outline_skip_previous_24),
                                 contentDescription = "Previous",
@@ -496,7 +450,6 @@ fun MuzixPlayerScreen(
                                 modifier = Modifier.size(32.dp)
                             )
                         }
-
                         // Play/Pause button
                         IconButton(
                             onClick = { togglePlayPause() },
@@ -520,11 +473,7 @@ fun MuzixPlayerScreen(
                                 )
                             }
                         }
-
-                        // Next button
-                        IconButton(
-                            onClick = { skipToNext() }
-                        ) {
+                        IconButton(onClick = { skipToNext() }) {
                             Icon(
                                 painter = painterResource(R.drawable.outline_skip_next_24),
                                 contentDescription = "Next",
@@ -532,19 +481,11 @@ fun MuzixPlayerScreen(
                                 modifier = Modifier.size(32.dp)
                             )
                         }
-
-                        // Repeat button
-                        IconButton(
-                            onClick = { toggleRepeat() }
-                        ) {
+                        IconButton(onClick = { toggleRepeat() }) {
                             Icon(
-                                painter = if (isRepeat) painterResource(R.drawable.outline_repeat_on_24) else painterResource(
-                                    R.drawable.outline_repeat_24
-                                ),
+                                painter = if (isRepeat) painterResource(R.drawable.outline_repeat_on_24) else painterResource(R.drawable.outline_repeat_24),
                                 contentDescription = "Repeat",
-                                tint = if (isRepeat) MaterialTheme.colorScheme.primary else Color.White.copy(
-                                    alpha = 0.7f
-                                ),
+                                tint = if (isRepeat) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f),
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -552,7 +493,6 @@ fun MuzixPlayerScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Track info
                     Text(
                         text = "${currentIndex + 1} of ${muzixList.size}",
                         style = MaterialTheme.typography.bodySmall,
@@ -562,10 +502,19 @@ fun MuzixPlayerScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
             }
+
+            // Playlist dialog
+            if (showAddDialog) {
+                PlaylistAddDialog(
+                    muzix = currentMuzix,
+                    onDismiss = { showAddDialog = false }
+                )
+            }
         }
     }
 }
 
+// Progress bar composable
 @Composable
 fun MuzixProgressBar(
     progress: Float,
@@ -575,17 +524,13 @@ fun MuzixProgressBar(
     var isDragging by remember { mutableStateOf(false) }
     var dragPosition by remember { mutableFloatStateOf(0f) }
     var isHovered by remember { mutableStateOf(false) }
-
     val currentProgress = if (isDragging) dragPosition else progress
-
     var trackWidthPx by remember { mutableStateOf(0f) }
     val density = LocalDensity.current
 
     Box(
         modifier = modifier
-            .onGloballyPositioned { coordinates ->
-                trackWidthPx = coordinates.size.width.toFloat()
-            }
+            .onGloballyPositioned { trackWidthPx = it.size.width.toFloat() }
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragStart = { offset ->
@@ -605,13 +550,11 @@ fun MuzixProgressBar(
             }
             .pointerInput(Unit) {
                 detectTapGestures { offset ->
-                    val seekPosition = offset.x / trackWidthPx
-                    onSeek(seekPosition.coerceIn(0f, 1f))
+                    onSeek((offset.x / trackWidthPx).coerceIn(0f, 1f))
                 }
             },
         contentAlignment = Alignment.CenterStart
     ) {
-        // Background track
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -619,8 +562,6 @@ fun MuzixProgressBar(
                 .clip(RoundedCornerShape(2.dp))
                 .background(Color.White.copy(alpha = 0.2f))
         )
-
-        // Progress track
         Box(
             modifier = Modifier
                 .fillMaxWidth(currentProgress)
@@ -628,14 +569,8 @@ fun MuzixProgressBar(
                 .clip(RoundedCornerShape(2.dp))
                 .background(Color.White)
         )
-
-        // Progress knob
         val dotSize = if (isDragging || isHovered) 12.dp else 4.dp
-        val offsetAdjust = dotSize / 2
-        val offsetX = with(density) {
-            (currentProgress * trackWidthPx).toDp() - offsetAdjust
-        }
-
+        val offsetX = with(density) { (currentProgress * trackWidthPx).toDp() - dotSize / 2 }
         Box(
             modifier = Modifier
                 .offset(x = offsetX)
@@ -646,14 +581,7 @@ fun MuzixProgressBar(
     }
 }
 
-@SuppressLint("DefaultLocale")
-fun formatTime(timeMs: Long): String {
-    val totalSeconds = timeMs / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return String.format("%d:%02d", minutes, seconds)
-}
-
+// Wavy circle button composable
 @Composable
 fun WavyCircleButton(
     onClick: () -> Unit,
@@ -661,63 +589,43 @@ fun WavyCircleButton(
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
-    // Capture composable values outside Canvas (important!)
     val waveColor = MaterialTheme.colorScheme.primary
     val iconTint = MaterialTheme.colorScheme.onPrimary
-
-    // Infinite animation for pulsating effect (only visually active when isPlaying)
     val infiniteTransition = rememberInfiniteTransition()
     val wavePhase by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        )
+        animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Restart),
+        label = "wavePhase"
     )
     val waveAmplitude by infiniteTransition.animateFloat(
         initialValue = 3f,
         targetValue = 10f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        )
+        animationSpec = infiniteRepeatable(tween(1000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "waveAmplitude"
     )
 
-    IconButton(
-        onClick = onClick,
-        modifier = modifier.size(72.dp)
-    ) {
+    IconButton(onClick = onClick, modifier = modifier) {
         Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {
-            // Canvas drawScope: no composable calls here
             Canvas(modifier = Modifier.matchParentSize()) {
                 val radius = size.minDimension / 2f
                 val center = Offset(size.width / 2f, size.height / 2f)
                 val points = 120
                 val path = Path()
-
                 for (i in 0..points) {
                     val angleDeg = i * (360f / points)
                     val angleRad = Math.toRadians(angleDeg.toDouble()).toFloat()
-
                     val dynamicAmp = if (isPlaying) waveAmplitude else 0f
                     val phaseRad = Math.toRadians(wavePhase.toDouble()).toFloat()
-                    // multiple waves for visual complexity
-                    val wave = (sin(angleRad * 6 + phaseRad) * 0.6f +
-                            sin(angleRad * 2 - phaseRad * 0.5f) * 0.25f)
-
+                    val wave = (sin(angleRad * 6 + phaseRad) * 0.6f + sin(angleRad * 2 - phaseRad * 0.5f) * 0.25f)
                     val r = radius + dynamicAmp * wave
                     val x = center.x + r * cos(angleRad)
                     val y = center.y + r * sin(angleRad)
-
                     if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
                 }
                 path.close()
-
-                // use the captured color (waveColor) here -- NOT MaterialTheme inside Canvas
                 drawPath(path = path, color = waveColor, style = Fill)
             }
-
             if (isLoading) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(28.dp),
@@ -725,12 +633,8 @@ fun WavyCircleButton(
                     strokeWidth = 2.dp
                 )
             } else {
-                // icon is a composable call so it's outside draw scope (OK)
                 Icon(
-                    painter = if (isPlaying)
-                        painterResource(R.drawable.outline_pause_24)
-                    else
-                        painterResource(R.drawable.outline_play_arrow_24),
+                    painter = if (isPlaying) painterResource(R.drawable.outline_pause_24) else painterResource(R.drawable.outline_play_arrow_24),
                     contentDescription = null,
                     tint = iconTint,
                     modifier = Modifier.size(36.dp)
@@ -738,4 +642,13 @@ fun WavyCircleButton(
             }
         }
     }
+}
+
+// Time formatter
+@SuppressLint("DefaultLocale")
+fun formatTime(timeMs: Long): String {
+    val totalSeconds = timeMs / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format("%d:%02d", minutes, seconds)
 }

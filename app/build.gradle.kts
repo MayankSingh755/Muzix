@@ -85,4 +85,7 @@ dependencies {
 
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.1")
     implementation ("androidx.compose.foundation:foundation:1.5.4")
+
+    implementation ("androidx.compose.material3:material3:1.3.2")
+
 }
