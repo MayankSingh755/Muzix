@@ -1,5 +1,4 @@
-package com.ionic.muzix.data
-
+package com.ionic.muzix.data.model
 
 /**
  * Singleton to share muzix data between activities

@@ -1,6 +1,6 @@
 package com.ionic.muzix.utils.searchfeatures
 
-import com.ionic.muzix.data.Muzix
+import com.ionic.muzix.data.model.Muzix
 
 /**
  * Utility object for search functionality

@@ -34,4 +34,14 @@
     <string name="playlist_cover">Playlist Cover</string>
     <string name="default_playlist_cover">Default playlist cover</string>
     <string name="artists">Artists</string>
+    <string name="search_music">Search Music</string>
+    <string name="no_tracks_in_this_playlist">No tracks in this playlist</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="track">track</string>
+    <string name="tracks">tracks</string>
+    <string name="albumArt_uri">content://media/external/audio/albumart</string>
+    <string name="unknown"><![CDATA[<Unknown>]]></string>
+    <string name="playlist_deleted">Playlist deleted</string>
+    <string name="tracksPlayAddDialog">%1$s  tracks</string>
+    <string name="save_to_playlist">Save to Playlist</string>
 </resources>

@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -27,7 +28,7 @@ import androidx.core.net.toUri
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import com.ionic.muzix.R
-import com.ionic.muzix.data.Muzix
+import com.ionic.muzix.data.model.Muzix
 import kotlinx.coroutines.delay
 
 @Composable
@@ -123,7 +124,7 @@ fun MiniPlayer(
             ) {
                 // Album Art
                 val albumArtUri = ContentUris.withAppendedId(
-                    "content://media/external/audio/albumart".toUri(),
+                    stringResource(R.string.albumArt_uri).toUri(),
                     muzix.albumId
                 )
 

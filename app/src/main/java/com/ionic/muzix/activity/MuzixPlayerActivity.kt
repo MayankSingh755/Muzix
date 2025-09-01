@@ -4,10 +4,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.ionic.muzix.data.Muzix
+import com.ionic.muzix.data.model.Muzix
 import com.ionic.muzix.screens.MuzixPlayerScreen
 import com.ionic.muzix.ui.theme.MuzixTheme
-import com.ionic.muzix.data.SharedMuzixData
+import com.ionic.muzix.data.model.SharedMuzixData
 
 class MuzixPlayerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,11 +34,10 @@ class MuzixPlayerActivity : ComponentActivity() {
                         initialIndex = initialIndex,
                         shouldStartPlayback = shouldStartPlayback,
                         onBack = {
-                            finish() // Close activity and return to MainActivity
+                            finish()
                         }
                     )
                 } else {
-                    // Fallback: Close activity if no data available
                     finish()
                 }
             }

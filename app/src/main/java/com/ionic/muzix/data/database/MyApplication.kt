@@ -1,4 +1,4 @@
-package com.ionic.muzix.data
+package com.ionic.muzix.data.database
 
 import android.app.Application
 import androidx.room.Room

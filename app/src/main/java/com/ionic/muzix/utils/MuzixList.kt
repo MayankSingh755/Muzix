@@ -27,8 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import com.ionic.muzix.R
-import com.ionic.muzix.data.Muzix
+import com.ionic.muzix.data.model.Muzix
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun MuzixList(
@@ -77,7 +78,7 @@ private fun MuzixItem(
         ) {
             // Album Art
             val albumArtUri = ContentUris.withAppendedId(
-                "content://media/external/audio/albumart".toUri(),
+               stringResource(R.string.album_art_uri).toUri(),
                 muzix.albumId
             )
 
@@ -137,7 +138,7 @@ private fun MuzixItem(
 }
 
 @Composable
-private fun getHighlightedText(
+fun getHighlightedText(
     text: String,
     searchQuery: String
 ): AnnotatedString {

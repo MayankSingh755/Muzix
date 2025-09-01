@@ -1,4 +1,4 @@
-package com.ionic.muzix.data
+package com.ionic.muzix.data.database
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

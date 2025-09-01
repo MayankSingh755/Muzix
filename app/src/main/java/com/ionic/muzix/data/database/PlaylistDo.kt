@@ -1,11 +1,11 @@
-package com.ionic.muzix.data
+package com.ionic.muzix.data.database
 
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
-import com.ionic.muzix.data.Playlist
+import com.ionic.muzix.data.model.Muzix
 import kotlinx.coroutines.flow.Flow
 
 @Dao

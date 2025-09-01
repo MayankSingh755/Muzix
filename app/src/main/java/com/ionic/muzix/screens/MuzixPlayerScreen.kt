@@ -43,7 +43,7 @@ import androidx.core.net.toUri
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import com.ionic.muzix.R
-import com.ionic.muzix.data.Muzix
+import com.ionic.muzix.data.model.Muzix
 import com.ionic.muzix.utils.MuzixService
 import kotlinx.coroutines.delay
 import kotlin.math.abs

@@ -18,9 +18,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.ui.res.painterResource
-import com.ionic.muzix.data.Muzix
-import com.ionic.muzix.data.MyApplication
-import com.ionic.muzix.data.Playlist
+import com.ionic.muzix.data.model.Muzix
+import com.ionic.muzix.data.database.MyApplication
+import com.ionic.muzix.data.database.Playlist
 import com.ionic.muzix.utils.getMuzixByIds
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
@@ -37,7 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.ionic.muzix.R
-import com.ionic.muzix.data.PlaylistDao
+import com.ionic.muzix.data.database.PlaylistDao
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -114,7 +114,8 @@ fun PlaylistDetailScreen(
                             showDeleteConfirm = false
                             onBack()
                         }
-                        Toast.makeText(context, "Playlist deleted", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context,
+                            context.getString(R.string.playlist_deleted), Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
@@ -136,7 +137,7 @@ fun PlaylistDetailScreen(
             TopAppBar(
                 title = {
                     Text(
-                        playlist?.name ?: "<Unknown>",
+                        playlist?.name ?: stringResource(R.string.unknown),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -207,7 +208,7 @@ fun PlaylistDetailScreen(
                                 if (playlist?.coverAlbumId != null) {
                                     AsyncImage(
                                         model = ContentUris.withAppendedId(
-                                            "content://media/external/audio/albumart".toUri(),
+                                            stringResource(R.string.albumArt_uri).toUri(),
                                             playlist!!.coverAlbumId!!
                                         ),
                                         contentDescription = "Cover",
@@ -250,7 +251,10 @@ fun PlaylistDetailScreen(
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    "${muzixList.size} ${if (muzixList.size == 1) "track" else "tracks"}",
+                                    "${muzixList.size} ${
+                                        if (muzixList.size == 1) stringResource(R.string.track) 
+                                        else stringResource(R.string.tracks)
+                                    }",
                                     style = MaterialTheme.typography.bodyLarge,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -282,7 +286,8 @@ fun PlaylistDetailScreen(
                                 OutlinedButton(
                                     onClick = {
                                         isShuffled = !isShuffled
-                                        val shuffledList = if (isShuffled) muzixList.shuffled() else muzixList
+                                        val shuffledList =
+                                            if (isShuffled) muzixList.shuffled() else muzixList
                                         onPlay(shuffledList, 0)
                                     },
                                     modifier = Modifier.weight(1f),
@@ -296,7 +301,7 @@ fun PlaylistDetailScreen(
                                         else MaterialTheme.colorScheme.onSurface
                                     )
                                     Spacer(Modifier.width(8.dp))
-                                    Text("Shuffle")
+                                    Text(stringResource(R.string.shuffle))
                                 }
                             }
                         }
@@ -322,7 +327,7 @@ fun PlaylistDetailScreen(
                         )
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "No tracks in this playlist",
+                            stringResource(R.string.no_tracks_in_this_playlist),
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center
@@ -500,7 +505,8 @@ private fun EnhancedTrackItem(
                                 dragDropState.onDrag(dragAmount.y)
 
                                 val itemHeight = 80.dp.toPx()
-                                val currentPosition = index * itemHeight + dragDropState.draggedDistance
+                                val currentPosition =
+                                    index * itemHeight + dragDropState.draggedDistance
                                 val targetIndex = (currentPosition / itemHeight).roundToInt()
                                     .coerceIn(0, dragDropState.itemCount - 1)
 

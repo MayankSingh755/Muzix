@@ -22,10 +22,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import com.ionic.muzix.R
 //import androidx.compose.material.icons.filled.MusicNote
-import com.ionic.muzix.data.Muzix
-import com.ionic.muzix.data.MyApplication
+import com.ionic.muzix.data.model.Muzix
+import com.ionic.muzix.data.database.MyApplication
 import androidx.core.net.toUri
-import com.ionic.muzix.data.Playlist
+import com.ionic.muzix.data.database.Playlist
 
 @Composable
 fun PlaylistAddDialog(
@@ -42,7 +42,7 @@ fun PlaylistAddDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.background(Color.Black),
-        title = { Text("Save to Playlist") },
+        title = { Text(stringResource(R.string.save_to_playlist)) },
         text = {
             Column {
                 // Create New
@@ -86,7 +86,7 @@ fun PlaylistAddDialog(
                                 if (playlist.coverAlbumId != null) {
                                     AsyncImage(
                                         model = ContentUris.withAppendedId(
-                                            "content://media/external/audio/albumart".toUri(),
+                                            stringResource(R.string.album_art_uri).toUri(),
                                             playlist.coverAlbumId
                                         ),
                                         contentDescription = "Cover",
@@ -101,7 +101,11 @@ fun PlaylistAddDialog(
                                 Spacer(Modifier.width(8.dp))
                                 Text(playlist.name)
                                 Spacer(Modifier.weight(1f))
-                                Text("${playlist.trackCount} tracks")
+                                Text(
+                                    stringResource(
+                                        R.string.tracksPlayAddDialog,
+                                        playlist.trackCount
+                                    ))
                             }
                         }
                     }

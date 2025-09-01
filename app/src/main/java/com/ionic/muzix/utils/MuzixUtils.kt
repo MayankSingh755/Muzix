@@ -2,7 +2,7 @@ package com.ionic.muzix.utils
 
 import android.content.Context
 import android.provider.MediaStore
-import com.ionic.muzix.data.Muzix
+import com.ionic.muzix.data.model.Muzix
 
 fun getMuzix(context: Context): List<Muzix> {
     val muzix = mutableListOf<Muzix>()
@@ -89,6 +89,5 @@ fun getMuzixByIds(context: Context, ids: List<Long>): List<Muzix> {
             )
         }
     }
-    // Preserve order based on ids
     return ids.mapNotNull { muzixMap[it] }
 }

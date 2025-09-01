@@ -7,7 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.ionic.muzix.screens.MuzixListScreen
 import com.ionic.muzix.ui.theme.MuzixTheme
-import com.ionic.muzix.data.SharedMuzixData
+import com.ionic.muzix.data.model.SharedMuzixData
 import android.widget.Toast
 
 class MainActivity : ComponentActivity() {
@@ -18,7 +18,6 @@ class MainActivity : ComponentActivity() {
             MuzixTheme {
                 MuzixListScreen(
                     onMuzixClick = { musicList, position ->
-                        // Store data in shared singleton
                         SharedMuzixData.setData(musicList, position)
                         val intent = Intent(this, MuzixPlayerActivity::class.java)
                         intent.putParcelableArrayListExtra("muzixList", ArrayList(musicList))

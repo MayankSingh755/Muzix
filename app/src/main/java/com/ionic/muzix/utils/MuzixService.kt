@@ -24,7 +24,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.ionic.muzix.R
-import com.ionic.muzix.data.Muzix
+import com.ionic.muzix.data.model.Muzix
 import android.content.ContentUris
 import android.content.pm.ServiceInfo
 import androidx.core.net.toUri
@@ -141,6 +141,14 @@ class MuzixService : Service() {
                             skipToNext()
                         }
                     }
+
+                    Player.STATE_BUFFERING -> {
+                        TODO()
+                    }
+
+                    Player.STATE_IDLE -> {
+                        TODO()
+                    }
                 }
                 updateNotification()
             }
@@ -158,7 +166,6 @@ class MuzixService : Service() {
 
     private fun setupAudioFocusListener() {
         val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
-            Log.d("MuzixService", "Audio focus changed: $focusChange")
             when (focusChange) {
                 AudioManager.AUDIOFOCUS_GAIN -> {
                     // Regained audio focus
@@ -168,27 +175,20 @@ class MuzixService : Service() {
                         exoPlayer.volume = 1.0f
                         wasPlayingBeforeFocusLoss = false
                     }
-                    Log.d("MuzixService", "Audio focus gained - resuming playback")
                 }
                 AudioManager.AUDIOFOCUS_LOSS -> {
-                    // Permanent loss of audio focus
                     hasAudioFocus = false
                     wasPlayingBeforeFocusLoss = exoPlayer.isPlaying
                     exoPlayer.pause()
-                    Log.d("MuzixService", "Audio focus lost permanently - pausing")
                 }
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                    // Temporary loss of audio focus
                     hasAudioFocus = false
                     wasPlayingBeforeFocusLoss = exoPlayer.isPlaying
                     exoPlayer.pause()
-                    Log.d("MuzixService", "Audio focus lost temporarily - pausing")
                 }
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                    // Temporary loss, but we can keep playing at reduced volume
                     if (exoPlayer.isPlaying) {
                         exoPlayer.volume = 0.3f // Lower volume
-                        Log.d("MuzixService", "Audio focus lost temporarily - ducking volume")
                     }
                 }
             }
@@ -203,11 +203,11 @@ class MuzixService : Service() {
             audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(audioAttributes)
                 .setAcceptsDelayedFocusGain(true)
-                .setWillPauseWhenDucked(false) // We'll handle ducking ourselves
+                .setWillPauseWhenDucked(false)
                 .setOnAudioFocusChangeListener(audioFocusChangeListener)
                 .build()
         } else {
-            // For older Android versions, we'll use the deprecated method
+            // For older Android versions, I'll use the deprecated method
             @Suppress("DEPRECATION")
             audioManager.requestAudioFocus(
                 audioFocusChangeListener,
@@ -223,14 +223,13 @@ class MuzixService : Service() {
         } else {
             @Suppress("DEPRECATION")
             audioManager.requestAudioFocus(
-                null, // We already set up the listener in setupAudioFocusListener
+                null,
                 AudioManager.STREAM_MUSIC,
                 AudioManager.AUDIOFOCUS_GAIN
             )
         }
 
         hasAudioFocus = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-        Log.d("MuzixService", "Audio focus request result: $result, hasAudioFocus: $hasAudioFocus")
         return hasAudioFocus
     }
 
@@ -242,7 +241,6 @@ class MuzixService : Service() {
             audioManager.abandonAudioFocus(null)
         }
         hasAudioFocus = false
-        Log.d("MuzixService", "Audio focus abandoned")
     }
 
     private fun createNotificationChannel() {
@@ -261,13 +259,10 @@ class MuzixService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? {
-        Log.d("MuzixService", "Service onBind")
         return binder
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("MuzixService", "onStartCommand: ${intent?.action}")
-
         // Handle media button intents
         MediaButtonReceiver.handleIntent(mediaSession, intent)
 
@@ -287,7 +282,6 @@ class MuzixService : Service() {
             "ACTION_SHUFFLE" -> toggleShuffle()
             "ACTION_REPEAT" -> toggleRepeat()
             "ACTION_START_FOREGROUND" -> {
-                // This action is used to start the service in foreground mode safely
                 isServiceStarted = true
                 if (exoPlayer.isPlaying) {
                     startForegroundServiceSafely()
@@ -299,7 +293,6 @@ class MuzixService : Service() {
     }
 
     override fun onDestroy() {
-        Log.d("MuzixService", "Service onDestroy")
         stopUpdating()
         stopForegroundServiceSafely()
         abandonAudioFocus()
@@ -397,8 +390,7 @@ class MuzixService : Service() {
             contentResolver.openInputStream(uri)?.use { input ->
                 return BitmapFactory.decodeStream(input)
             }
-        } catch (e: Exception) {
-            Log.w("MuzixService", "Failed to load album art: ${e.message}")
+        } catch (_: Exception) {
         }
         return null
     }
@@ -449,7 +441,7 @@ class MuzixService : Service() {
                 }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    // For Android 14+ (API 34+), use ServiceCompat
+                    // For Android 14+ (API 34+)
                     ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, foregroundServiceType)
                 } else {
                     // For older versions
@@ -457,10 +449,7 @@ class MuzixService : Service() {
                 }
 
                 isForeground = true
-                Log.d("MuzixService", "Started foreground service")
-            } catch (e: Exception) {
-                Log.e("MuzixService", "Failed to start foreground service: ${e.message}")
-                // Fallback: just post the notification without foreground service
+            } catch (_: Exception) {
                 val notificationManager = getSystemService(NotificationManager::class.java)
                 notificationManager.notify(NOTIFICATION_ID, buildNotification())
             }
@@ -476,9 +465,7 @@ class MuzixService : Service() {
                     stopForeground(STOP_FOREGROUND_DETACH)
                 }
                 isForeground = false
-                Log.d("MuzixService", "Stopped foreground service")
-            } catch (e: Exception) {
-                Log.e("MuzixService", "Failed to stop foreground service: ${e.message}")
+            } catch (_: Exception) {
             }
         }
     }
@@ -563,8 +550,7 @@ class MuzixService : Service() {
             val notification = buildNotification()
             val notificationManager = getSystemService(NotificationManager::class.java)
             notificationManager.notify(NOTIFICATION_ID, notification)
-        } catch (e: Exception) {
-            Log.e("MuzixService", "Failed to update notification: ${e.message}")
+        } catch (_: Exception) {
         }
     }
 

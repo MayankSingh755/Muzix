@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -28,7 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import com.ionic.muzix.data.Muzix
+import com.ionic.muzix.data.model.Muzix
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -69,12 +68,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -118,9 +113,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import com.ionic.muzix.activity.PlaylistDetailActivity
-import com.ionic.muzix.data.MyApplication
+import com.ionic.muzix.data.database.MyApplication
 import com.ionic.muzix.utils.PlaylistAddDialog
-import com.ionic.muzix.data.Playlist
+import com.ionic.muzix.data.database.Playlist
+import com.ionic.muzix.utils.getHighlightedText
 
 sealed class ListItem {
     data class HeaderItem(val letter: String) : ListItem()
@@ -269,31 +265,31 @@ private fun ArtistItem(
     }
 }
 
-@Composable
-private fun getHighlightedText(text: String, searchQuery: String): AnnotatedString {
-    if (searchQuery.isBlank() || text.isBlank()) return AnnotatedString(text)
-
-    val lowercaseText = text.lowercase()
-    val lowercaseQuery = searchQuery.lowercase().trim()
-    val startIndex = lowercaseText.indexOf(lowercaseQuery)
-
-    return if (startIndex >= 0) {
-        buildAnnotatedString {
-            append(text.substring(0, startIndex))
-            withStyle(
-                style = SpanStyle(
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                append(text.substring(startIndex, startIndex + lowercaseQuery.length))
-            }
-            append(text.substring(startIndex + lowercaseQuery.length))
-        }
-    } else {
-        AnnotatedString(text)
-    }
-}
+//@Composable
+//private fun getHighlightedText(text: String, searchQuery: String): AnnotatedString {
+//    if (searchQuery.isBlank() || text.isBlank()) return AnnotatedString(text)
+//
+//    val lowercaseText = text.lowercase()
+//    val lowercaseQuery = searchQuery.lowercase().trim()
+//    val startIndex = lowercaseText.indexOf(lowercaseQuery)
+//
+//    return if (startIndex >= 0) {
+//        buildAnnotatedString {
+//            append(text.substring(0, startIndex))
+//            withStyle(
+//                style = SpanStyle(
+//                    fontWeight = FontWeight.Bold,
+//                    color = MaterialTheme.colorScheme.primary
+//                )
+//            ) {
+//                append(text.substring(startIndex, startIndex + lowercaseQuery.length))
+//            }
+//            append(text.substring(startIndex + lowercaseQuery.length))
+//        }
+//    } else {
+//        AnnotatedString(text)
+//    }
+//}
 
 // Enum for sort options
 enum class SortOption(val displayName: String) {
@@ -634,25 +630,58 @@ fun GroupedArtistList(
     }
 }
 @Composable
-fun rememberScrollDirection(scrollState: LazyListState): State<Boolean> {
+fun rememberScrollDirection(
+    scrollState: LazyListState,
+    threshold: Int = 150
+): State<Boolean> {
     val isScrollingUp = remember { mutableStateOf(true) }
-    var lastIndex by remember { mutableStateOf(0) }
-    var lastScrollOffset by remember { mutableStateOf(0) }
+    var lastIndex by remember { mutableIntStateOf(0) }
+    var lastScrollOffset by remember { mutableIntStateOf(0) }
+    var scrollStartPosition by remember { mutableIntStateOf(0) }
+    var hasScrolledDownEnough by remember { mutableStateOf(false) }
 
     LaunchedEffect(scrollState) {
         snapshotFlow { scrollState.firstVisibleItemIndex to scrollState.firstVisibleItemScrollOffset }
             .collect { (index, offset) ->
-                if (index == lastIndex) {
-                    isScrollingUp.value = offset < lastScrollOffset
+                val currentPosition = (index * 1000) + offset // Approximate total scroll position
+
+                // Calculate scroll direction
+                val isCurrentlyScrollingUp = if (index == lastIndex) {
+                    offset < lastScrollOffset
                 } else {
-                    isScrollingUp.value = index < lastIndex
+                    index < lastIndex
                 }
+
+                // If direction changed, reset scroll start position
+                if (isCurrentlyScrollingUp != isScrollingUp.value) {
+                    scrollStartPosition = currentPosition
+                }
+
+                // Check if we've scrolled enough in the current direction
+                val scrollDistance = kotlin.math.abs(currentPosition - scrollStartPosition)
+
+                if (!isCurrentlyScrollingUp) {
+                    // Scrolling down - hide immediately
+                    isScrollingUp.value = false
+                    hasScrolledDownEnough = true
+                } else if (isCurrentlyScrollingUp && hasScrolledDownEnough) {
+                    // Scrolling up - only show after threshold is met
+                    if (scrollDistance >= threshold) {
+                        isScrollingUp.value = true
+                        hasScrolledDownEnough = false
+                    }
+                } else if (!hasScrolledDownEnough) {
+                    // Haven't scrolled down enough yet, keep showing
+                    isScrollingUp.value = true
+                }
+
                 lastIndex = index
                 lastScrollOffset = offset
             }
     }
     return isScrollingUp
 }
+
 @SuppressLint("PermissionLaunchedDuringComposition")
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -947,7 +976,6 @@ fun MuzixListScreen(
                         .padding(innerPadding),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Animated header that hides on scroll
                     AnimatedVisibility(
                         visible = showTopElements,
                         enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -969,8 +997,6 @@ fun MuzixListScreen(
                         stringResource(R.string.artists),
                         stringResource(R.string.playlists)
                     )
-
-                    // Animated tab row that hides on scroll
                     AnimatedVisibility(
                         visible = showTopElements,
                         enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -1159,7 +1185,6 @@ fun MuzixListScreen(
                                             modifier = Modifier.padding(bottom = 8.dp)
                                         )
                                     }
-                                    // Pass the scroll state to GroupedMuzixList
                                     GroupedMuzixList(
                                         groupedItems = filteredItemsState.value,
                                         onMuzixClick = { muzix, index ->

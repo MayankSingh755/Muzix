@@ -13,21 +13,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.ionic.muzix.R
 import com.ionic.muzix.utils.searchfeatures.SearchBar
 import com.ionic.muzix.utils.searchfeatures.SearchSuggestions
-import com.ionic.muzix.data.Muzix
+import com.ionic.muzix.data.model.Muzix
 import com.ionic.muzix.ui.theme.MuzixTheme
 import com.ionic.muzix.utils.MuzixList
 import com.ionic.muzix.utils.searchfeatures.SearchManager
 import com.ionic.muzix.utils.searchfeatures.SearchUtils
-import com.ionic.muzix.data.SharedMuzixData
+import com.ionic.muzix.data.model.SharedMuzixData
 import kotlinx.coroutines.delay
 
-/**
- * Optional dedicated search activity
- * Use this if you want a full-screen search experience
- */
 @OptIn(ExperimentalMaterial3Api::class)
 class SearchActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,7 +74,7 @@ private fun SearchScreen(
 
     // Handle search
     LaunchedEffect(searchQuery) {
-        delay(300) // Debounce
+        delay(300)
 
         if (searchQuery.isBlank()) {
             filteredMuzix = emptyList()
@@ -98,7 +96,7 @@ private fun SearchScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Search Music") },
+                title = { Text(stringResource(R.string.search_music)) },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
