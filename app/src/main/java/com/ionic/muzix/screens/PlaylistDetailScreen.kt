@@ -567,7 +567,7 @@ private fun EnhancedTrackItem(
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    muzix.artist ?: "Unknown Artist",
+                    muzix.artist,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -597,9 +597,9 @@ class DragDropState(
     private val lazyListState: LazyListState,
     private val onMove: (Int, Int) -> Unit
 ) {
-    var draggedDistance by mutableStateOf(0f)
+    var draggedDistance by mutableFloatStateOf(0f)
     var draggingItemIndex by mutableStateOf<Int?>(null)
-    var itemCount by mutableStateOf(0)
+    var itemCount by mutableIntStateOf(0)
 
     fun onDragStart(index: Int) {
         draggingItemIndex = index

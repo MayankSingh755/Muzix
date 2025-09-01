@@ -65,7 +65,7 @@ fun MiniPlayer(
         onDispose {
             try {
                 context.unbindService(connection)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Service might not be bound
             }
         }
@@ -105,15 +105,6 @@ fun MiniPlayer(
         musicService?.skipToPrevious()
     }
 
-    fun toggleShuffle() {
-        musicService?.toggleShuffle()
-    }
-
-    fun toggleRepeat() {
-        musicService?.toggleRepeat()
-    }
-
-    // Only show mini player if there's a current song
     currentMuzix?.let { muzix ->
         Card(
             modifier = modifier
@@ -178,19 +169,6 @@ fun MiniPlayer(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    // Shuffle button
-                    IconButton(
-                        onClick = { toggleShuffle() },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            painter = if (isShuffle) painterResource(R.drawable.outline_shuffle_on_24) else painterResource(R.drawable.outline_shuffle_24),
-                            contentDescription = "Shuffle",
-                            tint = if (isShuffle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
                     // Previous button
                     IconButton(
                         onClick = { skipToPrevious() },
@@ -240,18 +218,6 @@ fun MiniPlayer(
                         )
                     }
 
-                    // Repeat button
-                    IconButton(
-                        onClick = { toggleRepeat() },
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            painter = if (isRepeat) painterResource(R.drawable.outline_repeat_on_24) else painterResource(R.drawable.outline_repeat_24),
-                            contentDescription = "Repeat",
-                            tint = if (isRepeat) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
                 }
             }
         }

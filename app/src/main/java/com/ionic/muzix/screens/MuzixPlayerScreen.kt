@@ -7,25 +7,16 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Path
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.unit.dp
-import kotlin.math.cos
-import kotlin.math.sin
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -41,8 +32,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -246,18 +235,17 @@ fun MuzixPlayerScreen(
                                         isDragging = true
                                     },
                                     onDragEnd = {
-                                        val threshold = 200f // Lowered for responsiveness
+                                        val threshold = 200f
                                         when {
                                             swipeAnimationProgress > threshold && currentIndex > 0 -> {
-                                                offsetX = 350f // Animate to full swipe right
+                                                offsetX = 350f
                                                 skipToPrevious()
                                             }
                                             swipeAnimationProgress < -threshold && currentIndex < muzixList.size - 1 -> {
-                                                offsetX = -350f // Animate to full swipe left
+                                                offsetX = -350f
                                                 skipToNext()
                                             }
                                             else -> {
-                                                // No skip, just snap back
                                                 offsetX = 0f
                                             }
                                         }
@@ -525,7 +513,7 @@ fun MuzixProgressBar(
     var dragPosition by remember { mutableFloatStateOf(0f) }
     var isHovered by remember { mutableStateOf(false) }
     val currentProgress = if (isDragging) dragPosition else progress
-    var trackWidthPx by remember { mutableStateOf(0f) }
+    var trackWidthPx by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
 
     Box(
@@ -580,70 +568,6 @@ fun MuzixProgressBar(
         )
     }
 }
-
-// Wavy circle button composable
-@Composable
-fun WavyCircleButton(
-    onClick: () -> Unit,
-    isPlaying: Boolean,
-    isLoading: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val waveColor = MaterialTheme.colorScheme.primary
-    val iconTint = MaterialTheme.colorScheme.onPrimary
-    val infiniteTransition = rememberInfiniteTransition()
-    val wavePhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(2000, easing = LinearEasing), RepeatMode.Restart),
-        label = "wavePhase"
-    )
-    val waveAmplitude by infiniteTransition.animateFloat(
-        initialValue = 3f,
-        targetValue = 10f,
-        animationSpec = infiniteRepeatable(tween(1000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "waveAmplitude"
-    )
-
-    IconButton(onClick = onClick, modifier = modifier) {
-        Box(modifier = Modifier.size(72.dp), contentAlignment = Alignment.Center) {
-            Canvas(modifier = Modifier.matchParentSize()) {
-                val radius = size.minDimension / 2f
-                val center = Offset(size.width / 2f, size.height / 2f)
-                val points = 120
-                val path = Path()
-                for (i in 0..points) {
-                    val angleDeg = i * (360f / points)
-                    val angleRad = Math.toRadians(angleDeg.toDouble()).toFloat()
-                    val dynamicAmp = if (isPlaying) waveAmplitude else 0f
-                    val phaseRad = Math.toRadians(wavePhase.toDouble()).toFloat()
-                    val wave = (sin(angleRad * 6 + phaseRad) * 0.6f + sin(angleRad * 2 - phaseRad * 0.5f) * 0.25f)
-                    val r = radius + dynamicAmp * wave
-                    val x = center.x + r * cos(angleRad)
-                    val y = center.y + r * sin(angleRad)
-                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                }
-                path.close()
-                drawPath(path = path, color = waveColor, style = Fill)
-            }
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
-                    color = iconTint,
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Icon(
-                    painter = if (isPlaying) painterResource(R.drawable.outline_pause_24) else painterResource(R.drawable.outline_play_arrow_24),
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(36.dp)
-                )
-            }
-        }
-    }
-}
-
 // Time formatter
 @SuppressLint("DefaultLocale")
 fun formatTime(timeMs: Long): String {

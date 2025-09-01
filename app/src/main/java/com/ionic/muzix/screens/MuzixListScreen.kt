@@ -9,12 +9,18 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.Build
 import android.os.IBinder
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -45,6 +51,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -120,6 +127,21 @@ sealed class ListItem {
     data class MuzixItem(val muzix: Muzix, val originalIndex: Int) : ListItem()
 }
 
+sealed class AlbumItem {
+    data class HeaderItem(val letter: String) : AlbumItem()
+    data class AlbumGroupItem(
+        val albumName: String,
+        val artist: String,
+        val albumId: Long,
+        val tracks: List<Muzix>
+    ) : AlbumItem()
+}
+
+sealed class ArtistItem {
+    data class HeaderItem(val letter: String) : ArtistItem()
+    data class ArtistGroupItem(val artistName: String, val tracks: List<Muzix>) : ArtistItem()
+}
+
 @Composable
 private fun MuzixItem(
     muzix: Muzix,
@@ -180,6 +202,67 @@ private fun MuzixItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.basicMarquee()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtistItem(
+    artistName: String,
+    tracks: List<Muzix>,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { onClick() })
+            },
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Use first track's album art as artist image
+            AsyncImage(
+                model = ContentUris.withAppendedId(
+                    stringResource(R.string.album_art_uri).toUri(),
+                    tracks.firstOrNull()?.albumId ?: 0L
+                ),
+                contentDescription = "Artist Image",
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(Color.Gray),
+                contentScale = ContentScale.Crop,
+                error = painterResource(R.drawable.baseline_music_note_24),
+                placeholder = painterResource(R.drawable.baseline_music_note_24)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = artistName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.basicMarquee()
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${tracks.size} ${if (tracks.size == 1) "track" else "tracks"}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -276,6 +359,55 @@ fun createGroupedListItems(muzixList: List<Muzix>, sortOption: SortOption): List
             groupedItems.add(ListItem.HeaderItem(letter))
             sortedGroupItems.forEach { muzix ->
                 groupedItems.add(ListItem.MuzixItem(muzix, muzixList.indexOf(muzix)))
+            }
+        }
+    }
+    return groupedItems
+}
+
+fun createGroupedAlbumItems(muzixList: List<Muzix>): List<AlbumItem> {
+    if (muzixList.isEmpty()) return emptyList()
+
+    val albumGroups = muzixList.groupBy { "${it.albumId}_${it.artist}" }
+    val sortedGroups = albumGroups.toList().sortedBy { it.first.split("_")[0] }
+
+    val groupedByLetter = sortedGroups.groupBy {
+        getGroupingLetter(it.first.split("_")[0])
+    }
+
+    val groupedItems = mutableListOf<AlbumItem>()
+    groupedByLetter.keys.sorted().forEach { letter ->
+        val albumsInGroup = groupedByLetter[letter] ?: emptyList()
+        if (albumsInGroup.isNotEmpty()) {
+            groupedItems.add(AlbumItem.HeaderItem(letter))
+            albumsInGroup.forEach { (albumKey, tracks) ->
+                val albumName = albumKey.split("_")[0]
+                val artist = albumKey.split("_").getOrNull(1) ?: "Unknown Artist"
+                val albumId = tracks.firstOrNull()?.albumId ?: 0L
+                groupedItems.add(AlbumItem.AlbumGroupItem(albumName, artist, albumId, tracks))
+            }
+        }
+    }
+    return groupedItems
+}
+
+fun createGroupedArtistItems(muzixList: List<Muzix>): List<ArtistItem> {
+    if (muzixList.isEmpty()) return emptyList()
+
+    val artistGroups = muzixList.groupBy { it.artist }
+    val sortedGroups = artistGroups.toList().sortedBy { it.first }
+
+    val groupedByLetter = sortedGroups.groupBy {
+        getGroupingLetter(it.first)
+    }
+
+    val groupedItems = mutableListOf<ArtistItem>()
+    groupedByLetter.keys.sorted().forEach { letter ->
+        val artistsInGroup = groupedByLetter[letter] ?: emptyList()
+        if (artistsInGroup.isNotEmpty()) {
+            groupedItems.add(ArtistItem.HeaderItem(letter))
+            artistsInGroup.forEach { (artistName, tracks) ->
+                groupedItems.add(ArtistItem.ArtistGroupItem(artistName, tracks))
             }
         }
     }
@@ -441,9 +573,9 @@ fun GroupedMuzixList(
     onMuzixClick: (Muzix, Int) -> Unit,
     onMuzixLongPress: (Muzix) -> Unit,
     modifier: Modifier = Modifier,
-    searchQuery: String = ""
+    searchQuery: String = "",
+    scrollState: LazyListState = rememberLazyListState()
 ) {
-    val scrollState = rememberLazyListState()
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = modifier,
@@ -470,6 +602,57 @@ fun GroupedMuzixList(
     }
 }
 
+@Composable
+fun GroupedArtistList(
+    groupedItems: List<ArtistItem>,
+    onArtistClick: (List<Muzix>) -> Unit,
+    modifier: Modifier = Modifier,
+    scrollState: LazyListState = rememberLazyListState()
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = modifier,
+            state = scrollState,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            items(groupedItems) { item ->
+                when (item) {
+                    is ArtistItem.HeaderItem -> SectionHeader(letter = item.letter)
+                    is ArtistItem.ArtistGroupItem -> ArtistItem(
+                        artistName = item.artistName,
+                        tracks = item.tracks,
+                        onClick = { onArtistClick(item.tracks) }
+                    )
+                }
+            }
+        }
+        DraggableScrollbar(
+            listState = scrollState,
+            config = ScrollbarConfig(),
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
+    }
+}
+@Composable
+fun rememberScrollDirection(scrollState: LazyListState): State<Boolean> {
+    val isScrollingUp = remember { mutableStateOf(true) }
+    var lastIndex by remember { mutableStateOf(0) }
+    var lastScrollOffset by remember { mutableStateOf(0) }
+
+    LaunchedEffect(scrollState) {
+        snapshotFlow { scrollState.firstVisibleItemIndex to scrollState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                if (index == lastIndex) {
+                    isScrollingUp.value = offset < lastScrollOffset
+                } else {
+                    isScrollingUp.value = index < lastIndex
+                }
+                lastIndex = index
+                lastScrollOffset = offset
+            }
+    }
+    return isScrollingUp
+}
 @SuppressLint("PermissionLaunchedDuringComposition")
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -486,6 +669,9 @@ fun MuzixListScreen(
     val muzixState = remember { mutableStateOf<List<Muzix>>(emptyList()) }
     val groupedItemsState = remember { mutableStateOf<List<ListItem>>(emptyList()) }
     val filteredItemsState = remember { mutableStateOf<List<ListItem>>(emptyList()) }
+    val groupedAlbumItemsState = remember { mutableStateOf<List<AlbumItem>>(emptyList()) }
+    val groupedArtistItemsState = remember { mutableStateOf<List<ArtistItem>>(emptyList()) }
+
     var searchQuery by remember { mutableStateOf("") }
     var isSearchExpanded by remember { mutableStateOf(false) }
     var searchSuggestions by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -498,6 +684,32 @@ fun MuzixListScreen(
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var showAddDialogForMuzix by remember { mutableStateOf<Muzix?>(null) }
+
+    val tracksScrollState = rememberLazyListState()
+    val artistsScrollState = rememberLazyListState()
+
+    val isScrollingUpTracks by rememberScrollDirection(tracksScrollState)
+    val isScrollingUpArtists by rememberScrollDirection(artistsScrollState)
+
+    val isScrollingUp = when (selectedTab) {
+        0 -> isScrollingUpTracks
+        1 -> isScrollingUpArtists
+        else -> true
+    }
+
+    val isAtTop = when (selectedTab) {
+        0 -> tracksScrollState.firstVisibleItemIndex == 0 &&
+                tracksScrollState.firstVisibleItemScrollOffset < 50
+        1 -> artistsScrollState.firstVisibleItemIndex == 0 &&
+                artistsScrollState.firstVisibleItemScrollOffset < 50
+        else -> true
+    }
+
+    val showTopElements = isScrollingUp || isAtTop
+
+    val showFABs = selectedTab == 0 &&
+            showTopElements &&
+            muzixState.value.isNotEmpty()
 
     val storagePermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.READ_MEDIA_AUDIO
@@ -554,6 +766,8 @@ fun MuzixListScreen(
             muzixState.value = loadedMuzix
             groupedItemsState.value = createGroupedListItems(loadedMuzix, currentSortOption)
             filteredItemsState.value = groupedItemsState.value
+            groupedAlbumItemsState.value = createGroupedAlbumItems(loadedMuzix)
+            groupedArtistItemsState.value = createGroupedArtistItems(loadedMuzix)
         }
     }
 
@@ -594,6 +808,15 @@ fun MuzixListScreen(
     fun handleSortOptionSelect(sortOption: SortOption) {
         currentSortOption = sortOption
         showSortMenu = false
+    }
+
+    fun startShufflePlay() {
+        val shuffledList = muzixState.value.shuffled()
+        onMuzixClick(shuffledList, 0)
+    }
+
+    fun startPlayFromBeginning() {
+        onMuzixClick(muzixState.value, 0)
     }
 
     if (showCreatePlaylistDialog) {
@@ -676,6 +899,44 @@ fun MuzixListScreen(
                     onExpandClick = onMiniPlayerExpand,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
                 )
+            },
+            floatingActionButton = {
+                AnimatedVisibility(
+                    visible = showFABs,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        // Shuffle FAB
+                        FloatingActionButton(
+                            onClick = { startShufflePlay() },
+                            containerColor = MaterialTheme.colorScheme.secondary,
+                            contentColor = MaterialTheme.colorScheme.onSecondary
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.outline_shuffle_24),
+                                contentDescription = "Shuffle Play",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        // Play FAB
+                        FloatingActionButton(
+                            onClick = { startPlayFromBeginning() },
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.outline_play_arrow_24),
+                                contentDescription = "Play All",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
             }
         ) { innerPadding ->
             MuzixTheme {
@@ -686,122 +947,162 @@ fun MuzixListScreen(
                         .padding(innerPadding),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = stringResource(R.string.MuzixListScreenWelcome),
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.displaySmall,
-                        color = Color.White
-                    )
-                    Spacer(Modifier.height(16.dp))
+                    // Animated header that hides on scroll
+                    AnimatedVisibility(
+                        visible = showTopElements,
+                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                    ) {
+                        Column {
+                            Text(
+                                text = stringResource(R.string.MuzixListScreenWelcome),
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.displaySmall,
+                                color = Color.White
+                            )
+                            Spacer(Modifier.height(16.dp))
+                        }
+                    }
 
                     val tabTitles = listOf(
                         stringResource(R.string.muzix),
+                        stringResource(R.string.artists),
                         stringResource(R.string.playlists)
                     )
-                    TabRow(
-                        selectedTabIndex = selectedTab,
-                        containerColor = Color.Transparent,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        indicator = { tabPositions ->
-                            TabRowDefaults.Indicator(
-                                modifier = Modifier
-                                    .tabIndicatorOffset(tabPositions[selectedTab])
-                                    .height(3.dp)
-                                    .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        },
-                        divider = {}
+
+                    // Animated tab row that hides on scroll
+                    AnimatedVisibility(
+                        visible = showTopElements,
+                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
                     ) {
-                        tabTitles.forEachIndexed { index, title ->
-                            Tab(
-                                selected = selectedTab == index,
-                                onClick = { selectedTab = index },
-                                text = {
-                                    Text(
-                                        text = title,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (selectedTab == index)
-                                            MaterialTheme.colorScheme.primary
-                                        else
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            )
+                        TabRow(
+                            selectedTabIndex = selectedTab,
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.primary,
+                            indicator = { tabPositions ->
+                                TabRowDefaults.Indicator(
+                                    modifier = Modifier
+                                        .tabIndicatorOffset(tabPositions[selectedTab])
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            divider = {}
+                        ) {
+                            tabTitles.forEachIndexed { index, title ->
+                                Tab(
+                                    selected = selectedTab == index,
+                                    onClick = { selectedTab = index },
+                                    text = {
+                                        Text(
+                                            text = title,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (selectedTab == index)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        SearchBar(
-                            query = searchQuery,
-                            onQueryChange = { searchQuery = it },
-                            onSearch = { performSearch(it) },
-                            isExpanded = isSearchExpanded,
-                            onExpandedChange = { isSearchExpanded = it },
-                            modifier = Modifier
-                                .weight(1f)
-                                .background(
-                                    Color.Black.copy(alpha = 0.3f),
-                                    RoundedCornerShape(12.dp)
-                                )
-                        )
-                        Box {
-                            IconButton(
-                                onClick = { showSortMenu = true },
+                    // Search bar and sort button - only show for tracks tab
+                    if (selectedTab == 0) {
+                        AnimatedVisibility(
+                            visible = showTopElements,
+                            enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                            exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut()
+                        ) {
+                            Row(
                                 modifier = Modifier
-                                    .background(
-                                        Color.Black.copy(alpha = 0.3f),
-                                        RoundedCornerShape(12.dp)
-                                    )
-                                    .size(56.dp)
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.baseline_sort_24),
-                                    contentDescription = "Sort",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
+                                SearchBar(
+                                    query = searchQuery,
+                                    onQueryChange = { searchQuery = it },
+                                    onSearch = { performSearch(it) },
+                                    isExpanded = isSearchExpanded,
+                                    onExpandedChange = { isSearchExpanded = it },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .background(
+                                            Color.Black.copy(alpha = 0.3f),
+                                            RoundedCornerShape(12.dp)
+                                        )
                                 )
-                            }
-                            DropdownMenu(
-                                expanded = showSortMenu,
-                                onDismissRequest = { showSortMenu = false },
-                                modifier = Modifier.background(
-                                    Color.Black.copy(alpha = 0.9f),
-                                    RoundedCornerShape(8.dp)
-                                )
-                            ) {
-                                SortOption.entries.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                text = option.displayName,
-                                                color = if (currentSortOption == option) MaterialTheme.colorScheme.primary else Color.White
+
+                                Box {
+                                    IconButton(
+                                        onClick = { showSortMenu = true },
+                                        modifier = Modifier
+                                            .background(
+                                                Color.Black.copy(alpha = 0.3f),
+                                                RoundedCornerShape(12.dp)
                                             )
-                                        },
-                                        onClick = { handleSortOptionSelect(option) }
-                                    )
+                                            .size(56.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.baseline_sort_24),
+                                            contentDescription = "Sort",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showSortMenu,
+                                        onDismissRequest = { showSortMenu = false },
+                                        modifier = Modifier.background(
+                                            Color.Black.copy(alpha = 0.9f),
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                    ) {
+                                        SortOption.entries.forEach { option ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = option.displayName,
+                                                        color = if (currentSortOption == option)
+                                                            MaterialTheme.colorScheme.primary
+                                                        else
+                                                            Color.White
+                                                    )
+                                                },
+                                                onClick = { handleSortOptionSelect(option) }
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
 
-                    if (currentSortOption != SortOption.DEFAULT) {
-                        Text(
-                            text = stringResource(R.string.sorted_by, currentSortOption.displayName),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
+                    if (currentSortOption != SortOption.DEFAULT && selectedTab == 0) {
+                        AnimatedVisibility(
+                            visible = showTopElements,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    R.string.sorted_by,
+                                    currentSortOption.displayName
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
                     }
 
-                    if (isSearchExpanded && (searchSuggestions.isNotEmpty() || recentSearches.isNotEmpty())) {
+                    if (isSearchExpanded && selectedTab != 2 && (searchSuggestions.isNotEmpty() || recentSearches.isNotEmpty())) {
                         SearchSuggestions(
                             suggestions = searchSuggestions,
                             recentSearches = if (searchQuery.isBlank()) recentSearches else emptyList(),
@@ -818,138 +1119,165 @@ fun MuzixListScreen(
 
                     Spacer(Modifier.height(8.dp))
 
-                    if (selectedTab == 0) {
-                        if (storagePermissionState.status.isGranted) {
-                            if (searchQuery.isNotBlank() && filteredItemsState.value.isEmpty()) {
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                    Text(
-                                        text = stringResource(
-                                            R.string.no_results_found_for,
-                                            searchQuery
-                                        ),
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = Color.White
+                    when (selectedTab) {
+                        0 -> { // Tracks
+                            if (storagePermissionState.status.isGranted) {
+                                if (searchQuery.isNotBlank() && filteredItemsState.value.isEmpty()) {
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        Text(
+                                            text = stringResource(
+                                                R.string.no_results_found_for,
+                                                searchQuery
+                                            ),
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = Color.White
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = stringResource(R.string.try_searching_with_different_keywords),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color.White.copy(alpha = 0.7f)
+                                        )
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                } else {
+                                    if (searchQuery.isNotBlank()) {
+                                        val resultCount =
+                                            filteredItemsState.value.count { it is ListItem.MuzixItem }
+                                        Text(
+                                            text = stringResource(
+                                                R.string.result_found,
+                                                resultCount,
+                                                if (resultCount != 1) "s" else ""
+                                            ),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color.White.copy(alpha = 0.8f),
+                                            modifier = Modifier.padding(bottom = 8.dp)
+                                        )
+                                    }
+                                    // Pass the scroll state to GroupedMuzixList
+                                    GroupedMuzixList(
+                                        groupedItems = filteredItemsState.value,
+                                        onMuzixClick = { muzix, index ->
+                                            onMuzixClick(
+                                                muzixState.value,
+                                                index
+                                            )
+                                        },
+                                        onMuzixLongPress = { showAddDialogForMuzix = it },
+                                        modifier = Modifier.weight(1f),
+                                        searchQuery = searchQuery,
+                                        scrollState = tracksScrollState
                                     )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = stringResource(R.string.try_searching_with_different_keywords),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Color.White.copy(alpha = 0.7f)
-                                    )
-                                    Spacer(modifier = Modifier.weight(1f))
                                 }
                             } else {
-                                if (searchQuery.isNotBlank()) {
-                                    val resultCount =
-                                        filteredItemsState.value.count { it is ListItem.MuzixItem }
-                                    Text(
-                                        text = stringResource(
-                                            R.string.result_found,
-                                            resultCount,
-                                            if (resultCount != 1) "s" else ""
-                                        ),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = Color.White.copy(alpha = 0.8f),
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    )
-                                }
-                                GroupedMuzixList(
-                                    groupedItems = filteredItemsState.value,
-                                    onMuzixClick = { muzix, index ->
-                                        onMuzixClick(
-                                            muzixState.value,
-                                            index
-                                        )
-                                    },
-                                    onMuzixLongPress = { showAddDialogForMuzix = it },
-                                    modifier = Modifier.weight(1f),
-                                    searchQuery = searchQuery
+                                Text(
+                                    text = stringResource(R.string.storage_permission_required_to_load_your_music),
+                                    color = Color.White
                                 )
                             }
-                        } else {
-                            Text(
-                                text = stringResource(R.string.storage_permission_required_to_load_your_music),
-                                color = Color.White
-                            )
                         }
-                    } else {
-                        val playlists by dao.getAllPlaylists().collectAsState(initial = emptyList())
 
-                        Box(modifier = Modifier.weight(1f)) {
-                            if (playlists.isEmpty()) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(32.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Card(
-                                        modifier = Modifier.size(120.dp),
-                                        shape = RoundedCornerShape(24.dp),
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(
-                                                alpha = 0.3f
-                                            )
-                                        ),
-                                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        1 -> { // Artists
+                            if (storagePermissionState.status.isGranted) {
+                                GroupedArtistList(
+                                    groupedItems = groupedArtistItemsState.value,
+                                    onArtistClick = { tracks ->
+                                        onMuzixClick(tracks, 0)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    scrollState = artistsScrollState
+                                )
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.storage_permission_required_to_load_your_music),
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        2 -> { // Playlists
+                            val playlists by dao.getAllPlaylists()
+                                .collectAsState(initial = emptyList())
+
+                            Box(modifier = Modifier.weight(1f)) {
+                                if (playlists.isEmpty()) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(32.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
                                     ) {
-                                        Box(
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentAlignment = Alignment.Center
+                                        Card(
+                                            modifier = Modifier.size(120.dp),
+                                            shape = RoundedCornerShape(24.dp),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(
+                                                    alpha = 0.3f
+                                                )
+                                            ),
+                                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                                         ) {
-                                            Icon(
-                                                painterResource(R.drawable.outline_library_music_24),
-                                                contentDescription = stringResource(R.string.no_playlists),
-                                                modifier = Modifier.size(48.dp),
-                                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                                            Box(
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    painterResource(R.drawable.outline_library_music_24),
+                                                    contentDescription = stringResource(R.string.no_playlists),
+                                                    modifier = Modifier.size(48.dp),
+                                                    tint = MaterialTheme.colorScheme.primary.copy(
+                                                        alpha = 0.7f
+                                                    )
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(Modifier.height(24.dp))
+
+                                        Text(
+                                            stringResource(R.string.no_playlists_yet),
+                                            style = MaterialTheme.typography.headlineSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+
+                                        Spacer(Modifier.height(8.dp))
+
+                                        Text(
+                                            stringResource(R.string.create_your_first_playlist_to_organize_your_music),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                } else {
+                                    LazyVerticalGrid(
+                                        columns = GridCells.Adaptive(minSize = 160.dp),
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentPadding = PaddingValues(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        items(playlists, key = { it.id }) { playlist ->
+                                            PlaylistCard(
+                                                playlist = playlist,
+                                                onClick = {
+                                                    val intent = Intent(
+                                                        context,
+                                                        PlaylistDetailActivity::class.java
+                                                    )
+                                                    intent.putExtra("playlistId", playlist.id)
+                                                    context.startActivity(intent)
+                                                },
+                                                modifier = Modifier.animateItemPlacement()
                                             )
                                         }
-                                    }
-
-                                    Spacer(Modifier.height(24.dp))
-
-                                    Text(
-                                        stringResource(R.string.no_playlists_yet),
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-
-                                    Spacer(Modifier.height(8.dp))
-
-                                    Text(
-                                        stringResource(R.string.create_your_first_playlist_to_organize_your_music),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            } else {
-                                LazyVerticalGrid(
-                                    columns = GridCells.Adaptive(minSize = 160.dp),
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    items(playlists, key = { it.id }) { playlist ->
-                                        PlaylistCard(
-                                            playlist = playlist,
-                                            onClick = {
-                                                val intent = Intent(
-                                                    context,
-                                                    PlaylistDetailActivity::class.java
-                                                )
-                                                intent.putExtra("playlistId", playlist.id)
-                                                context.startActivity(intent)
-                                            },
-                                            modifier = Modifier.animateItemPlacement()
-                                        )
                                     }
                                 }
                             }
@@ -1109,6 +1437,7 @@ private fun DefaultPlaylistCover() {
         )
     }
 }
+
 fun Modifier.tabIndicatorOffset(tabPosition: TabPosition): Modifier {
     return fillMaxWidth()
         .wrapContentSize(Alignment.BottomStart)

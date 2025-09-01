@@ -33,4 +33,5 @@
     <string name="no_playlists">No playlists</string>
     <string name="playlist_cover">Playlist Cover</string>
     <string name="default_playlist_cover">Default playlist cover</string>
+    <string name="artists">Artists</string>
 </resources>
