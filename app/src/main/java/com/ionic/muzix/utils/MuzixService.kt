@@ -122,7 +122,6 @@ class MuzixService : Service() {
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
-                Log.d("MuzixService", "onPlaybackStateChanged: $playbackState")
                 when (playbackState) {
                     Player.STATE_READY -> {
                         val muzix = getCurrentMuzix()
@@ -140,14 +139,6 @@ class MuzixService : Service() {
                         } else {
                             skipToNext()
                         }
-                    }
-
-                    Player.STATE_BUFFERING -> {
-                        TODO()
-                    }
-
-                    Player.STATE_IDLE -> {
-                        TODO()
                     }
                 }
                 updateNotification()

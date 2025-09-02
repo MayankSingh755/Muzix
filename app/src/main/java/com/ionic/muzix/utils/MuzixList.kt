@@ -5,6 +5,7 @@ import android.content.ContentUris
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -29,6 +30,7 @@ import coil.compose.AsyncImage
 import com.ionic.muzix.R
 import com.ionic.muzix.data.model.Muzix
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 
 @Composable
@@ -136,6 +138,67 @@ private fun MuzixItem(
         }
     }
 }
+@Composable
+fun ArtistItem(
+    artistName: String,
+    tracks: List<Muzix>,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { onClick() })
+            },
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Use first track's album art as artist image
+            AsyncImage(
+                model = ContentUris.withAppendedId(
+                    stringResource(R.string.album_art_uri).toUri(),
+                    tracks.firstOrNull()?.albumId ?: 0L
+                ),
+                contentDescription = "Artist Image",
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Gray),
+                contentScale = ContentScale.Crop,
+                error = painterResource(R.drawable.baseline_music_note_24),
+                placeholder = painterResource(R.drawable.baseline_music_note_24)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = artistName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.basicMarquee()
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "${tracks.size} ${if (tracks.size == 1) "track" else "tracks"}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
 
 @Composable
 fun getHighlightedText(

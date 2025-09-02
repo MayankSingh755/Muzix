@@ -116,6 +116,8 @@ import com.ionic.muzix.activity.PlaylistDetailActivity
 import com.ionic.muzix.data.database.MyApplication
 import com.ionic.muzix.utils.PlaylistAddDialog
 import com.ionic.muzix.data.database.Playlist
+import com.ionic.muzix.screens.ArtistItem
+import com.ionic.muzix.utils.ArtistItem
 import com.ionic.muzix.utils.getHighlightedText
 
 sealed class ListItem {
@@ -203,93 +205,6 @@ private fun MuzixItem(
         }
     }
 }
-
-@Composable
-private fun ArtistItem(
-    artistName: String,
-    tracks: List<Muzix>,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .pointerInput(Unit) {
-                detectTapGestures(onTap = { onClick() })
-            },
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Use first track's album art as artist image
-            AsyncImage(
-                model = ContentUris.withAppendedId(
-                    stringResource(R.string.album_art_uri).toUri(),
-                    tracks.firstOrNull()?.albumId ?: 0L
-                ),
-                contentDescription = "Artist Image",
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(Color.Gray),
-                contentScale = ContentScale.Crop,
-                error = painterResource(R.drawable.baseline_music_note_24),
-                placeholder = painterResource(R.drawable.baseline_music_note_24)
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = artistName,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.basicMarquee()
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "${tracks.size} ${if (tracks.size == 1) "track" else "tracks"}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.7f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
-//@Composable
-//private fun getHighlightedText(text: String, searchQuery: String): AnnotatedString {
-//    if (searchQuery.isBlank() || text.isBlank()) return AnnotatedString(text)
-//
-//    val lowercaseText = text.lowercase()
-//    val lowercaseQuery = searchQuery.lowercase().trim()
-//    val startIndex = lowercaseText.indexOf(lowercaseQuery)
-//
-//    return if (startIndex >= 0) {
-//        buildAnnotatedString {
-//            append(text.substring(0, startIndex))
-//            withStyle(
-//                style = SpanStyle(
-//                    fontWeight = FontWeight.Bold,
-//                    color = MaterialTheme.colorScheme.primary
-//                )
-//            ) {
-//                append(text.substring(startIndex, startIndex + lowercaseQuery.length))
-//            }
-//            append(text.substring(startIndex + lowercaseQuery.length))
-//        }
-//    } else {
-//        AnnotatedString(text)
-//    }
-//}
 
 // Enum for sort options
 enum class SortOption(val displayName: String) {
@@ -643,35 +558,29 @@ fun rememberScrollDirection(
     LaunchedEffect(scrollState) {
         snapshotFlow { scrollState.firstVisibleItemIndex to scrollState.firstVisibleItemScrollOffset }
             .collect { (index, offset) ->
-                val currentPosition = (index * 1000) + offset // Approximate total scroll position
+                val currentPosition = (index * 1000) + offset
 
-                // Calculate scroll direction
                 val isCurrentlyScrollingUp = if (index == lastIndex) {
                     offset < lastScrollOffset
                 } else {
                     index < lastIndex
                 }
 
-                // If direction changed, reset scroll start position
                 if (isCurrentlyScrollingUp != isScrollingUp.value) {
                     scrollStartPosition = currentPosition
                 }
 
-                // Check if we've scrolled enough in the current direction
                 val scrollDistance = kotlin.math.abs(currentPosition - scrollStartPosition)
 
                 if (!isCurrentlyScrollingUp) {
-                    // Scrolling down - hide immediately
                     isScrollingUp.value = false
                     hasScrolledDownEnough = true
                 } else if (isCurrentlyScrollingUp && hasScrolledDownEnough) {
-                    // Scrolling up - only show after threshold is met
                     if (scrollDistance >= threshold) {
                         isScrollingUp.value = true
                         hasScrolledDownEnough = false
                     }
                 } else if (!hasScrolledDownEnough) {
-                    // Haven't scrolled down enough yet, keep showing
                     isScrollingUp.value = true
                 }
 
@@ -710,7 +619,7 @@ fun MuzixListScreen(
     var muzixService by remember { mutableStateOf<MuzixService?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var currentMuzix by remember { mutableStateOf<Muzix?>(null) }
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(1) }
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var showAddDialogForMuzix by remember { mutableStateOf<Muzix?>(null) }
 
@@ -1038,7 +947,7 @@ fun MuzixListScreen(
                     }
 
                     // Search bar and sort button - only show for tracks tab
-                    if (selectedTab == 0) {
+                    if (selectedTab == 1) {
                         AnimatedVisibility(
                             visible = showTopElements,
                             enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -1146,7 +1055,25 @@ fun MuzixListScreen(
                     Spacer(Modifier.height(8.dp))
 
                     when (selectedTab) {
-                        0 -> { // Tracks
+                        0 -> { // Artists
+                            if (storagePermissionState.status.isGranted) {
+                                GroupedArtistList(
+                                    groupedItems = groupedArtistItemsState.value,
+                                    onArtistClick = { tracks ->
+                                        onMuzixClick(tracks, 0)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    scrollState = artistsScrollState
+                                )
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.storage_permission_required_to_load_your_music),
+                                    color = Color.White
+                                )
+                            }
+                        }
+
+                        1 -> { // Tracks
                             if (storagePermissionState.status.isGranted) {
                                 if (searchQuery.isNotBlank() && filteredItemsState.value.isEmpty()) {
                                     Column(
@@ -1199,24 +1126,6 @@ fun MuzixListScreen(
                                         scrollState = tracksScrollState
                                     )
                                 }
-                            } else {
-                                Text(
-                                    text = stringResource(R.string.storage_permission_required_to_load_your_music),
-                                    color = Color.White
-                                )
-                            }
-                        }
-
-                        1 -> { // Artists
-                            if (storagePermissionState.status.isGranted) {
-                                GroupedArtistList(
-                                    groupedItems = groupedArtistItemsState.value,
-                                    onArtistClick = { tracks ->
-                                        onMuzixClick(tracks, 0)
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    scrollState = artistsScrollState
-                                )
                             } else {
                                 Text(
                                     text = stringResource(R.string.storage_permission_required_to_load_your_music),
